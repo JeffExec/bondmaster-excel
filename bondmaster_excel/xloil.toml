@@ -1,0 +1,20 @@
+# xlOil configuration for BondMaster Excel Add-in
+# This file configures xlOil to load our UDFs
+
+[xloil]
+# Log level: DEBUG, INFO, WARNING, ERROR
+log_level = "INFO"
+
+# Python modules to load (contains our UDFs)
+load = ["bondmaster_excel.udfs"]
+
+[xloil.python]
+# Environment settings
+# Uncomment to use a specific Python environment
+# executable = "C:/path/to/python.exe"
+
+[addin]
+# Add-in metadata
+name = "BondMaster"
+description = "Government Bond Reference Data"
+publisher = "MapleCap Partners"
