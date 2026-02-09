@@ -43,4 +43,8 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "RUF"]
-ignore = ["E501"]
+ignore = [
+    "E501",   # Line too long
+    "N802",   # Function name should be lowercase (Excel UDFs need uppercase)
+    "W293",   # Blank line contains whitespace (in docstrings)
+]
