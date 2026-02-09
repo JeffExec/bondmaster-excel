@@ -8,9 +8,10 @@ Comprehensive test suite covering:
 - Edge cases and boundary conditions
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
 import sys
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Mock xloil before importing udfs
 mock_xloil = MagicMock()
@@ -31,7 +32,6 @@ sys.modules["xloil"] = mock_xloil
 
 # Now import after mocking
 from bondmaster_excel import udfs
-
 
 # =============================================================================
 # Test Fixtures
