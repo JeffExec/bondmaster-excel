@@ -2,13 +2,26 @@
 BondMaster Excel UDFs (User Defined Functions).
 
 These functions are exposed to Excel via xlOil.
+
+Complexity Analysis:
+    - BONDSTATIC: O(1) cache hit, O(1) API call on miss (single bond lookup)
+    - BONDINFO: O(1) same as BONDSTATIC
+    - BONDLIST: O(n) where n = bonds in country (streams from API)
+    - BONDSEARCH: O(n) where n = matching bonds
+    - BONDCOUNT: O(1) via pre-computed stats endpoint
+
+Cache Strategy:
+    TTL-based LRU cache (5 min default). Bond reference data is semi-static
+    (changes infrequently), so short TTL balances freshness vs. performance.
+    Cache auto-evicts stale entries on access. Manual clear via BONDCACHE_CLEAR().
 """
 
 import os
 import re
 import time
+import threading
 from datetime import datetime
-from functools import lru_cache
+from typing import NamedTuple
 
 import httpx
 import xloil as xlo
@@ -17,6 +30,8 @@ import xloil as xlo
 API_BASE_URL = os.environ.get("BONDMASTER_API_URL", "http://127.0.0.1:8000")
 REQUEST_TIMEOUT = 10.0
 MAX_RETRIES = 2
+CACHE_TTL_SECONDS = float(os.environ.get("BONDMASTER_CACHE_TTL", "300"))  # 5 min default
+CACHE_MAX_SIZE = 500
 
 # ISIN validation pattern: 2 letters + 9 alphanumeric + 1 check digit
 ISIN_PATTERN = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}[0-9]$")
@@ -42,18 +57,104 @@ def _close_client() -> None:
 
 
 def _is_valid_isin(isin: str) -> bool:
-    """Validate ISIN format."""
+    """Validate ISIN format. O(1) regex match."""
     return bool(ISIN_PATTERN.match(isin))
 
 
-# LRU cache for bond data (bounded size)
-@lru_cache(maxsize=500)
-def _fetch_bond_cached(isin: str) -> tuple | None:
+# =============================================================================
+# TTL-aware LRU Cache
+# =============================================================================
+
+class _CacheEntry(NamedTuple):
+    """Cache entry with expiration timestamp."""
+    data: tuple  # Bond data as tuple of tuples (hashable)
+    expires_at: float  # Unix timestamp
+
+
+class _TTLCache:
     """
-    Fetch bond data from API with caching.
-    
-    Returns tuple (for hashability) or None.
-    Uses retry logic for transient failures.
+    Thread-safe TTL-aware LRU cache.
+
+    Complexity:
+        - get: O(1) average (dict lookup)
+        - set: O(1) average, O(n) worst case during eviction
+        - Eviction: LRU when full, plus TTL expiry on access
+    """
+
+    def __init__(self, maxsize: int = 500, ttl_seconds: float = 300.0):
+        self._cache: dict[str, _CacheEntry] = {}
+        self._maxsize = maxsize
+        self._ttl = ttl_seconds
+        self._lock = threading.Lock()
+        self._hits = 0
+        self._misses = 0
+
+    def get(self, key: str) -> tuple | None:
+        """Get value if exists and not expired. Returns None on miss/expiry."""
+        with self._lock:
+            entry = self._cache.get(key)
+            if entry is None:
+                self._misses += 1
+                return None
+
+            # Check TTL
+            if time.time() > entry.expires_at:
+                del self._cache[key]
+                self._misses += 1
+                return None
+
+            # Move to end (most recently used) - Python 3.7+ dicts maintain order
+            self._cache[key] = self._cache.pop(key)
+            self._hits += 1
+            return entry.data
+
+    def set(self, key: str, value: tuple) -> None:
+        """Store value with TTL. Evicts LRU if at capacity."""
+        with self._lock:
+            # Remove existing to update position
+            if key in self._cache:
+                del self._cache[key]
+            # Evict oldest if at capacity
+            elif len(self._cache) >= self._maxsize:
+                oldest_key = next(iter(self._cache))
+                del self._cache[oldest_key]
+
+            self._cache[key] = _CacheEntry(
+                data=value,
+                expires_at=time.time() + self._ttl
+            )
+
+    def clear(self) -> None:
+        """Clear all cached entries."""
+        with self._lock:
+            self._cache.clear()
+            self._hits = 0
+            self._misses = 0
+
+    def stats(self) -> dict:
+        """Return cache statistics."""
+        with self._lock:
+            total = self._hits + self._misses
+            return {
+                "size": len(self._cache),
+                "maxsize": self._maxsize,
+                "hits": self._hits,
+                "misses": self._misses,
+                "hit_rate": self._hits / total if total > 0 else 0.0,
+                "ttl_seconds": self._ttl,
+            }
+
+
+# Global cache instance
+_bond_cache = _TTLCache(maxsize=CACHE_MAX_SIZE, ttl_seconds=CACHE_TTL_SECONDS)
+
+
+def _fetch_bond_from_api(isin: str) -> tuple | None:
+    """
+    Fetch bond data from API with retry logic.
+
+    Returns tuple of (key, value) pairs for hashability, or None.
+    Complexity: O(1) - single HTTP request + JSON parse.
     """
     for attempt in range(MAX_RETRIES + 1):
         try:
@@ -62,7 +163,6 @@ def _fetch_bond_cached(isin: str) -> tuple | None:
 
             if response.status_code == 200:
                 data = response.json()
-                # Convert to tuple of tuples for hashability
                 return tuple(sorted(data.items()))
             elif response.status_code == 404:
                 xlo.log(f"Bond not found: {isin}", level="DEBUG")
@@ -77,7 +177,7 @@ def _fetch_bond_cached(isin: str) -> tuple | None:
         except httpx.TimeoutException:
             xlo.log(f"Timeout fetching bond {isin} (attempt {attempt + 1})", level="WARNING")
             if attempt < MAX_RETRIES:
-                time.sleep(0.1 * (2 ** attempt))
+                time.sleep(0.1 * (2 ** attempt))  # Exponential backoff
                 continue
             return None
 
@@ -92,21 +192,34 @@ def _fetch_bond_cached(isin: str) -> tuple | None:
 
 
 def _fetch_bond(isin: str) -> dict | None:
-    """Fetch bond and convert back to dict."""
+    """
+    Fetch bond with TTL caching.
+
+    Complexity: O(1) on cache hit, O(1) + network on cache miss.
+    """
     isin = isin.upper().strip()
 
     if not _is_valid_isin(isin):
         return None
 
-    result = _fetch_bond_cached(isin)
+    # Check cache first
+    cached = _bond_cache.get(isin)
+    if cached is not None:
+        return dict(cached)
+
+    # Cache miss - fetch from API
+    result = _fetch_bond_from_api(isin)
     if result is None:
         return None
+
+    # Store in cache
+    _bond_cache.set(isin, result)
     return dict(result)
 
 
 def _clear_cache() -> None:
     """Clear the bond cache."""
-    _fetch_bond_cached.cache_clear()
+    _bond_cache.clear()
 
 
 # =============================================================================
@@ -437,5 +550,29 @@ def BONDCACHE_CLEAR() -> str:
     """
     Clear cached bond data. Call this after updating the database.
     """
+    stats = _bond_cache.stats()
     _clear_cache()
-    return f"Cache cleared at {datetime.now().strftime('%H:%M:%S')}"
+    return f"Cleared {stats['size']} entries (was {stats['hit_rate']:.0%} hit rate)"
+
+
+# =============================================================================
+# BONDCACHE_STATS - Show cache statistics
+# =============================================================================
+
+@xlo.func(
+    help="Show cache statistics (size, hit rate, TTL)",
+    category="BondMaster",
+    volatile=True,
+)
+def BONDCACHE_STATS() -> str:
+    """
+    Display cache performance statistics.
+
+    Returns: "Size: N/500 | Hits: X% | TTL: 300s"
+    """
+    stats = _bond_cache.stats()
+    return (
+        f"Size: {stats['size']}/{stats['maxsize']} | "
+        f"Hits: {stats['hit_rate']:.0%} | "
+        f"TTL: {stats['ttl_seconds']:.0f}s"
+    )
