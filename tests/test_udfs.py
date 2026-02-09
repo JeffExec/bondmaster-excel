@@ -8,9 +8,10 @@ Comprehensive test suite covering:
 - Edge cases and boundary conditions
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
 import sys
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Mock xloil before importing udfs
 mock_xloil = MagicMock()
@@ -31,7 +32,6 @@ sys.modules["xloil"] = mock_xloil
 
 # Now import after mocking
 from bondmaster_excel import udfs
-
 
 # =============================================================================
 # Test Fixtures
@@ -574,26 +574,45 @@ class TestBONDCACHE_CLEAR:
 
     def test_clears_cache(self):
         """Test cache is cleared."""
-        # With lru_cache, we can verify by checking cache_info
-        # First, populate cache by calling _fetch_bond_cached
+        # With TTL cache, we can verify by checking the returned stats
         with patch.object(udfs, "_get_client") as mock_client:
             mock_response = MockResponse(200, MOCK_BOND)
             mock_client.return_value.get.return_value = mock_response
             
-            # This would populate the cache (mocked, but tests the flow)
+            # Clear cache and verify function ran
             result = udfs.BONDCACHE_CLEAR()
             
-            # Verify cache was cleared (cache_info shows hits/misses reset isn't 
-            # possible with lru_cache, but we can verify function ran)
-            assert "Cache cleared" in result
+            # New format: "Cleared N entries (was X% hit rate)"
+            assert "Cleared" in result
+            assert "entries" in result
 
-    def test_returns_timestamp(self):
-        """Test returns timestamp string."""
+    def test_returns_stats(self):
+        """Test returns cache stats in output."""
         result = udfs.BONDCACHE_CLEAR()
-        assert "Cache cleared at" in result
-        # Should contain HH:MM:SS format
-        import re
-        assert re.search(r"\d{2}:\d{2}:\d{2}", result)
+        # New format: "Cleared N entries (was X% hit rate)"
+        assert "Cleared" in result
+        assert "hit rate" in result
+
+
+# =============================================================================
+# BONDCACHE_STATS Tests
+# =============================================================================
+
+class TestBONDCACHE_STATS:
+    """Tests for BONDCACHE_STATS function."""
+
+    def test_returns_stats_string(self):
+        """Test returns formatted stats string."""
+        result = udfs.BONDCACHE_STATS()
+        assert "Size:" in result
+        assert "Hits:" in result
+        assert "TTL:" in result
+
+    def test_shows_cache_size(self):
+        """Test shows current cache size and max."""
+        result = udfs.BONDCACHE_STATS()
+        # Format: "Size: N/500 | ..."
+        assert "/500" in result or "/500" in result.replace(" ", "")
 
 
 # =============================================================================
