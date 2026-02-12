@@ -284,7 +284,7 @@ def BONDSTATIC(isin: str, field: str) -> xlo.ExcelValue:
     COMMON FIELDS:
         coupon_rate     - Coupon rate (as %, e.g., 1.5 means 1.5%)
         maturity_date   - Maturity date
-        issue_date      - Issue date  
+        issue_date      - Issue date
         issuer          - Issuing entity name
         currency        - Currency code (USD, GBP, EUR)
         security_type   - NOMINAL or INDEX_LINKED
@@ -485,7 +485,7 @@ def BONDSEARCH(
         =BONDSEARCH("country", "US", "security_type", "INDEX_LINKED")
         =BONDSEARCH("currency", "EUR", "maturity_from", "2030-01-01")
     """
-    params = {"limit": 500}
+    params: dict[str, Any] = {"limit": 500}
 
     filters = [
         (field1, value1),
@@ -710,7 +710,7 @@ def BONDREFRESH(country: str | None = None, api_key: str | None = None) -> xlo.E
     if api_key:
         headers["X-API-Key"] = api_key
 
-    json_data = {}
+    json_data: dict[str, Any] = {}
     if country:
         json_data["country"] = country.upper().strip()
     else:
@@ -851,7 +851,7 @@ def BONDACTIONS(
             params={"days": days_ahead},
         )
     else:
-        params = {"limit": 100}
+        params: dict[str, Any] = {"limit": 100}
         if action_type:
             params["action_type"] = action_type.upper()
         success, data = _api_request("GET", "/enterprise/corporate-actions", params=params)
@@ -1045,7 +1045,4 @@ def BONDISINVALID(isin: str) -> xlo.ExcelValue:
     country = isin[:2]
     # Accept known countries plus common ISIN prefixes
     valid_prefixes = set(COUNTRY_CODES.keys()) | {"XS", "EU"}  # XS = Eurobonds
-    if country not in valid_prefixes:
-        return False
-
-    return True
+    return country in valid_prefixes

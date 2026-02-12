@@ -858,3 +858,399 @@ class TestTimeouts:
         with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
             result = udfs.BONDLIST("GB")
             assert is_error(result)
+
+
+# =============================================================================
+# BONDYEARSTOMAT Tests
+# =============================================================================
+
+class TestBONDYEARSTOMAT:
+    """Tests for BONDYEARSTOMAT function."""
+
+    def test_calculates_years_to_maturity(self):
+        """Test basic years to maturity calculation."""
+        # Bond matures 2026-07-22
+        with patch.object(udfs, "_fetch_bond", return_value=MOCK_BOND):
+            result = udfs.BONDYEARSTOMAT("GB00BYZW3G56")
+            assert isinstance(result, float)
+            assert result >= 0
+
+    def test_matured_bond_returns_zero(self):
+        """Test matured bond returns 0."""
+        past_bond = {**MOCK_BOND, "maturity_date": "2020-01-01"}
+        with patch.object(udfs, "_fetch_bond", return_value=past_bond):
+            result = udfs.BONDYEARSTOMAT("GB00BYZW3G56")
+            assert result == 0.0
+
+    def test_bond_not_found_returns_error(self):
+        """Test non-existent bond returns error."""
+        with patch.object(udfs, "_fetch_bond", return_value=None):
+            result = udfs.BONDYEARSTOMAT("XX0000000000")
+            assert is_error(result)
+
+    def test_no_maturity_date_returns_error(self):
+        """Test bond without maturity date returns error."""
+        no_maturity = {**MOCK_BOND, "maturity_date": None}
+        with patch.object(udfs, "_fetch_bond", return_value=no_maturity):
+            result = udfs.BONDYEARSTOMAT("GB00BYZW3G56")
+            assert is_error(result)
+
+    def test_custom_as_of_date(self):
+        """Test calculation with custom as_of date."""
+        with patch.object(udfs, "_fetch_bond", return_value=MOCK_BOND):
+            result = udfs.BONDYEARSTOMAT("GB00BYZW3G56", "2025-01-01")
+            assert isinstance(result, float)
+
+
+# =============================================================================
+# BONDCOUPONFREQ Tests
+# =============================================================================
+
+class TestBONDCOUPONFREQ:
+    """Tests for BONDCOUPONFREQ function."""
+
+    def test_semi_annual(self):
+        """Test semi-annual frequency."""
+        with patch.object(udfs, "_fetch_bond", return_value=MOCK_BOND):
+            result = udfs.BONDCOUPONFREQ("GB00BYZW3G56")
+            assert result == "Semi-annual"
+
+    def test_annual(self):
+        """Test annual frequency."""
+        annual_bond = {**MOCK_BOND, "coupon_frequency": 1}
+        with patch.object(udfs, "_fetch_bond", return_value=annual_bond):
+            result = udfs.BONDCOUPONFREQ("GB00BYZW3G56")
+            assert result == "Annual"
+
+    def test_zero_coupon(self):
+        """Test zero coupon bond."""
+        zero_coupon = {**MOCK_BOND, "coupon_rate": 0}
+        with patch.object(udfs, "_fetch_bond", return_value=zero_coupon):
+            result = udfs.BONDCOUPONFREQ("GB00BYZW3G56")
+            assert result == "Zero coupon"
+
+    def test_bond_not_found(self):
+        """Test non-existent bond returns error."""
+        with patch.object(udfs, "_fetch_bond", return_value=None):
+            result = udfs.BONDCOUPONFREQ("XX0000000000")
+            assert is_error(result)
+
+
+# =============================================================================
+# BONDISLINKER Tests
+# =============================================================================
+
+class TestBONDISLINKER:
+    """Tests for BONDISLINKER function."""
+
+    def test_nominal_returns_false(self):
+        """Test nominal bond returns FALSE."""
+        with patch.object(udfs, "_fetch_bond", return_value=MOCK_BOND):
+            result = udfs.BONDISLINKER("GB00BYZW3G56")
+            assert result is False
+
+    def test_index_linked_returns_true(self):
+        """Test index-linked bond returns TRUE."""
+        linker = {**MOCK_BOND, "security_type": "INDEX_LINKED"}
+        with patch.object(udfs, "_fetch_bond", return_value=linker):
+            result = udfs.BONDISLINKER("GB00BYZW3G56")
+            assert result is True
+
+    def test_bond_not_found(self):
+        """Test non-existent bond returns error."""
+        with patch.object(udfs, "_fetch_bond", return_value=None):
+            result = udfs.BONDISLINKER("XX0000000000")
+            assert is_error(result)
+
+
+# =============================================================================
+# BONDISINVALID Tests
+# =============================================================================
+
+class TestBONDISINVALID:
+    """Tests for BONDISINVALID function."""
+
+    def test_valid_isin_returns_true(self):
+        """Test valid ISIN returns TRUE."""
+        result = udfs.BONDISINVALID("GB00BYZW3G56")
+        assert result is True
+
+    def test_valid_us_isin(self):
+        """Test valid US ISIN."""
+        result = udfs.BONDISINVALID("US912810TM58")
+        assert result is True
+
+    def test_eurobond_xs_prefix(self):
+        """Test XS prefix (Eurobonds) is accepted."""
+        result = udfs.BONDISINVALID("XS1234567890")
+        assert result is True
+
+    def test_invalid_format_returns_false(self):
+        """Test invalid format returns FALSE."""
+        result = udfs.BONDISINVALID("invalid")
+        assert result is False
+
+    def test_invalid_country_returns_false(self):
+        """Test unknown country code returns FALSE."""
+        result = udfs.BONDISINVALID("ZZ1234567890")
+        assert result is False
+
+    def test_empty_returns_false(self):
+        """Test empty string returns FALSE."""
+        result = udfs.BONDISINVALID("")
+        assert result is False
+
+
+# =============================================================================
+# BONDHELP Tests
+# =============================================================================
+
+class TestBONDHELP:
+    """Tests for BONDHELP function."""
+
+    def test_no_topic_returns_overview(self):
+        """Test no topic returns overview."""
+        result = udfs.BONDHELP()
+        assert isinstance(result, list)
+        assert len(result) > 0
+
+    def test_fields_topic(self):
+        """Test fields topic returns field list."""
+        result = udfs.BONDHELP("fields")
+        assert isinstance(result, list)
+        # First row is header
+        assert result[0] == ["Field", "Description"]
+        assert len(result) > 10
+
+    def test_countries_topic(self):
+        """Test countries topic returns country list."""
+        result = udfs.BONDHELP("countries")
+        assert isinstance(result, list)
+        assert result[0] == ["Code", "Country"]
+
+    def test_functions_topic(self):
+        """Test functions topic returns function list."""
+        result = udfs.BONDHELP("functions")
+        assert isinstance(result, list)
+        assert result[0] == ["Function", "Description"]
+
+    def test_unknown_topic_returns_error(self):
+        """Test unknown topic returns error."""
+        result = udfs.BONDHELP("invalid_topic")
+        assert is_error(result)
+
+
+# =============================================================================
+# BONDMATURITYRANGE Tests
+# =============================================================================
+
+class TestBONDMATURITYRANGE:
+    """Tests for BONDMATURITYRANGE function."""
+
+    def test_returns_bonds_in_range(self):
+        """Test returns bonds maturing in date range."""
+        mock_response = MockResponse(200, {"data": [MOCK_BOND, MOCK_BOND_2]})
+
+        def mock_get(url, params=None):
+            return mock_response
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            result = udfs.BONDMATURITYRANGE("2025-01-01", "2030-12-31")
+            assert isinstance(result, list)
+            assert len(result) == 2
+
+    def test_empty_result_returns_error(self):
+        """Test empty result returns error."""
+        mock_response = MockResponse(200, {"data": []})
+
+        def mock_get(url, params=None):
+            return mock_response
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            result = udfs.BONDMATURITYRANGE("2025-01-01", "2025-12-31")
+            assert is_error(result)
+
+
+# =============================================================================
+# BONDLINEAGE Tests
+# =============================================================================
+
+class TestBONDLINEAGE:
+    """Tests for BONDLINEAGE function (enterprise)."""
+
+    def test_returns_lineage_summary(self):
+        """Test returns lineage summary."""
+        mock_lineage = {
+            "data": {
+                "contributing_sources": ["source1", "source2"],
+                "reconciliation_confidence": 0.95,
+                "field_sources": {"coupon_rate": {"source_name": "source1", "confidence": 0.98}},
+            }
+        }
+        mock_response = MockResponse(200, mock_lineage)
+
+        def mock_get(url, params=None):
+            return mock_response
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            result = udfs.BONDLINEAGE("DE0001102580")
+            assert "source1" in result
+
+    def test_specific_field_lineage(self):
+        """Test returns lineage for specific field."""
+        mock_lineage = {
+            "data": {
+                "field_sources": {"coupon_rate": {"source_name": "source1", "confidence": 0.98}},
+            }
+        }
+        mock_response = MockResponse(200, mock_lineage)
+
+        def mock_get(url, params=None):
+            return mock_response
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            result = udfs.BONDLINEAGE("DE0001102580", "coupon_rate")
+            assert "source1" in result
+
+    def test_api_error_returns_error(self):
+        """Test API error returns error message."""
+        mock_response = MockResponse(404)
+
+        def mock_get(url, params=None):
+            return mock_response
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            result = udfs.BONDLINEAGE("XX0000000000")
+            assert is_error(result)
+
+
+# =============================================================================
+# BONDHISTORY Tests
+# =============================================================================
+
+class TestBONDHISTORY:
+    """Tests for BONDHISTORY function (enterprise)."""
+
+    def test_returns_history(self):
+        """Test returns change history."""
+        mock_history = {
+            "data": [
+                {
+                    "changed_at": "2026-01-15",
+                    "change_type": "UPDATE",
+                    "field_name": "coupon_rate",
+                    "old_value": "0.01",
+                    "new_value": "0.015",
+                }
+            ]
+        }
+        mock_response = MockResponse(200, mock_history)
+
+        def mock_get(url, params=None):
+            return mock_response
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            result = udfs.BONDHISTORY("DE0001102580")
+            assert isinstance(result, list)
+            # Header row + data row
+            assert len(result) == 2
+
+    def test_empty_history_returns_error(self):
+        """Test empty history returns error."""
+        mock_response = MockResponse(200, {"data": []})
+
+        def mock_get(url, params=None):
+            return mock_response
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            result = udfs.BONDHISTORY("DE0001102580")
+            assert is_error(result)
+
+
+# =============================================================================
+# BONDACTIONS Tests
+# =============================================================================
+
+class TestBONDACTIONS:
+    """Tests for BONDACTIONS function (enterprise)."""
+
+    def test_returns_corporate_actions(self):
+        """Test returns corporate actions."""
+        mock_actions = {
+            "data": [
+                {
+                    "isin": "DE0001102580",
+                    "action_type": "MATURED",
+                    "effective_date": "2026-01-15",
+                    "notes": "Bond matured",
+                }
+            ]
+        }
+        mock_response = MockResponse(200, mock_actions)
+
+        def mock_get(url, params=None):
+            return mock_response
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            result = udfs.BONDACTIONS()
+            assert isinstance(result, list)
+            # Header row + data row
+            assert len(result) == 2
+
+    def test_no_actions_returns_error(self):
+        """Test no actions returns error."""
+        mock_response = MockResponse(200, {"data": []})
+
+        def mock_get(url, params=None):
+            return mock_response
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            result = udfs.BONDACTIONS()
+            assert is_error(result)
+
+
+# =============================================================================
+# BONDREFRESH Tests
+# =============================================================================
+
+class TestBONDREFRESH:
+    """Tests for BONDREFRESH function."""
+
+    def test_refresh_returns_message(self):
+        """Test refresh returns success message."""
+        mock_response = MockResponse(200, {"message": "Refresh started"})
+
+        def mock_get(url, params=None):
+            return mock_response
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            result = udfs.BONDREFRESH("US", "test-api-key")
+            assert "Refresh" in result
+
+    def test_refresh_clears_cache(self):
+        """Test refresh clears the cache."""
+        mock_response = MockResponse(200, {"message": "Refresh started"})
+
+        def mock_get(url, params=None):
+            return mock_response
+
+        # Pre-populate cache
+        udfs._bond_cache.set("US912810TM58", MOCK_BOND_2)
+        assert udfs._bond_cache.get("US912810TM58") is not None
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            udfs.BONDREFRESH("US", "test-api-key")
+
+        # Cache should be cleared
+        assert udfs._bond_cache.get("US912810TM58") is None
+
+    def test_api_error_returns_error(self):
+        """Test API error returns error message."""
+        mock_response = MockResponse(403)
+
+        def mock_get(url, params=None):
+            return mock_response
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            result = udfs.BONDREFRESH("US", "bad-key")
+            assert is_error(result)
