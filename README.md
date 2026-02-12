@@ -10,7 +10,7 @@
 
 ## ✨ Features
 
-- **20+ Excel functions** covering all bond-master capabilities
+- **18 Excel functions** covering all bond-master capabilities
 - **Native XLL format** — no macro security warnings
 - **Sub-millisecond lookups** via intelligent caching
 - **Works offline** — local SQLite database
@@ -30,30 +30,114 @@
 | 🇯🇵 Japan | 30+ | Full |
 | 🇳🇱 Netherlands | 15+ | Full |
 
-## 🚀 Quick Start
+---
 
-### 1. Install
-```bash
-pip install bondmaster bondmaster-excel xloil httpx
+## 🚀 Installation (Windows)
+
+### Prerequisites
+- Windows 10/11
+- Microsoft Excel (desktop version, not web)
+- Python 3.11 or 3.12
+
+### Step 1: Install Python packages
+
+Open **Command Prompt** (or PowerShell) and run:
+
+```cmd
+pip install bondmaster bondmaster-excel xlOil httpx
+```
+
+### Step 2: Install xlOil into Excel
+
+```cmd
 python -m xloil install
 ```
 
-### 2. Load Data
-```bash
+This registers xlOil with Excel. You should see:
+```
+xlOil registered for Excel
+```
+
+### Step 3: Configure xlOil to load bondmaster-excel
+
+Find your xlOil config file:
+```cmd
+python -c "import xloil; print(xloil.config_path())"
+```
+
+Open that file (usually `%APPDATA%\xlOil\xlOil.ini`) and add:
+
+```ini
+[xlOil]
+Plugins = bondmaster_excel
+```
+
+### Step 4: Load bond data
+
+```cmd
 bondmaster fetch --seed-only
 ```
 
-### 3. Start API
-```bash
+This downloads reference data for all supported markets (~1000 bonds).
+
+### Step 5: Start the API server
+
+```cmd
 bondmaster serve
 ```
 
-### 4. Use in Excel
-```excel
-=BONDAPI_STATUS()                        → ✓ Connected
-=BONDSTATIC("US912810TM58", "coupon")    → 4.625
-=BONDLIST("GB")                          → [UK gilt ISINs]
+**Keep this terminal open** while using Excel. You should see:
 ```
+INFO:     Uvicorn running on http://127.0.0.1:8000
+```
+
+### Step 6: Open Excel and test
+
+1. Open Excel
+2. In any cell, type: `=BONDAPI_STATUS()`
+3. Press Enter
+
+If you see **✓ Connected** — you're done! 🎉
+
+If you see **✗ Disconnected** — make sure the API server is running (Step 5).
+
+---
+
+## 🔧 Troubleshooting Installation
+
+### "xlOil not found" in Excel
+
+1. Close Excel completely
+2. Re-run: `python -m xloil install`
+3. Restart Excel
+
+### "bondmaster_excel not found"
+
+Make sure you installed with pip:
+```cmd
+pip show bondmaster-excel
+```
+
+If not found, install it:
+```cmd
+pip install bondmaster-excel
+```
+
+### Functions show #NAME! error
+
+xlOil isn't loading. Check:
+1. Excel → File → Options → Add-ins
+2. Look for "xlOil" in the list
+3. If not there, re-run `python -m xloil install`
+
+### "Cannot connect" error
+
+The API server isn't running. Open a new terminal and run:
+```cmd
+bondmaster serve
+```
+
+---
 
 ## 📖 Function Reference
 
@@ -94,6 +178,8 @@ bondmaster serve
 | `BONDHELP(topic)` | Built-in help | `=BONDHELP("fields")` |
 | `BONDISINVALID(isin)` | Validate ISIN | `=BONDISINVALID("GB00BYZW3G56")` → TRUE |
 
+---
+
 ## 📋 Available Fields
 
 Use these with `BONDSTATIC(isin, field)`:
@@ -111,23 +197,22 @@ Use these with `BONDSTATIC(isin, field)`:
 | `name` | Full bond name | |
 | `outstanding_amount` | Amount outstanding | |
 
+---
+
 ## 🎯 Common Use Cases
 
 ### Build a Portfolio Tracker
 
-```excel
-| A (ISIN)        | B (Coupon)                    | C (Maturity)                      | D (Years)                |
-|-----------------|-------------------------------|-----------------------------------|--------------------------|
-| GB00BYZW3G56    | =BONDSTATIC(A2, "coupon")     | =BONDSTATIC(A2, "maturity")       | =BONDYEARSTOMAT(A2)      |
-| US912810TM58    | =BONDSTATIC(A3, "coupon")     | =BONDSTATIC(A3, "maturity")       | =BONDYEARSTOMAT(A3)      |
-```
+| A (ISIN) | B (Coupon) | C (Maturity) | D (Years) |
+|----------|------------|--------------|-----------|
+| GB00BYZW3G56 | `=BONDSTATIC(A2, "coupon")` | `=BONDSTATIC(A2, "maturity")` | `=BONDYEARSTOMAT(A2)` |
+| US912810TM58 | `=BONDSTATIC(A3, "coupon")` | `=BONDSTATIC(A3, "maturity")` | `=BONDYEARSTOMAT(A3)` |
 
 ### Find Bonds Maturing Soon
 
 ```excel
 =BONDMATURITYRANGE("2025-01-01", "2025-12-31", "US")
 ```
-Returns ISIN and maturity date for all matching bonds.
 
 ### List All Inflation-Linked Bonds
 
@@ -136,12 +221,7 @@ Returns ISIN and maturity date for all matching bonds.
 =BONDLIST("US", "INDEX_LINKED")    → US TIPS
 ```
 
-### Data Quality Check
-
-```excel
-=BONDLINEAGE("DE0001102580", "coupon_rate")
-→ "deutsche_finanzagentur (confidence: 95%)"
-```
+---
 
 ## ⚙️ Configuration
 
@@ -152,50 +232,14 @@ Returns ISIN and maturity date for all matching bonds.
 | `BONDMASTER_API_URL` | `http://127.0.0.1:8000` | API server URL |
 | `BONDMASTER_CACHE_TTL` | `300` | Cache TTL in seconds |
 
-### Custom API URL
+### Remote API Server
 
-For remote servers:
-```powershell
+If running the API on another machine:
+```cmd
 set BONDMASTER_API_URL=http://bondserver.company.com:8000
 ```
 
-## 🔧 Troubleshooting
-
-### "✗ Disconnected" Error
-
-**Problem:** API server not running
-
-**Solution:**
-```bash
-bondmaster serve
-```
-Keep terminal open while using Excel.
-
-### #VALUE! Errors
-
-**Problem:** Invalid input
-
-**Check:**
-- ISIN is 12 characters
-- Field name is spelled correctly
-- Run `=BONDHELP("fields")` to see valid fields
-
-### Slow First Lookup
-
-**Normal behavior.** First lookup fetches from API. Subsequent lookups use cache (5-minute TTL).
-
-Check cache stats:
-```excel
-=BONDCACHE_STATS()
-→ "Size: 50/500 | Hit Rate: 95% | TTL: 300s"
-```
-
-### Outdated Data
-
-Clear cache and retry:
-```excel
-=BONDCACHE_CLEAR()
-```
+---
 
 ## 📁 Examples
 
@@ -203,12 +247,14 @@ See the `examples/` folder:
 - `GettingStarted.md` — Step-by-step tutorial
 - `PortfolioTemplate.csv` — Import as starting point
 
+---
+
 ## 🏗️ Architecture
 
 ```
 ┌─────────────────────┐     HTTP/REST     ┌──────────────────────┐
 │  Excel + xlOil      │ ◄───────────────► │  BondMaster API      │
-│  (XLL Add-in)       │  localhost:8000   │  (Python/FastAPI)    │
+│  (XLL Add-in)       │  localhost:8000   │  (bondmaster serve)  │
 │                     │                   │                      │
 │  • TTL Cache        │                   │  • SQLite Storage    │
 │  • Input Validation │                   │  • Multi-source      │
@@ -216,22 +262,7 @@ See the `examples/` folder:
 └─────────────────────┘                   └──────────────────────┘
 ```
 
-## 🧪 Development
-
-```bash
-# Clone
-git clone https://github.com/JeffExec/bondmaster-excel.git
-cd bondmaster-excel
-
-# Install dev dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Type check
-mypy bondmaster_excel/
-```
+---
 
 ## 📄 License
 
@@ -239,4 +270,4 @@ MIT License
 
 ---
 
-**Need help?** Use `=BONDHELP()` in Excel or open an issue on GitHub.
+**Need help?** Type `=BONDHELP()` in Excel or open an issue on GitHub.
