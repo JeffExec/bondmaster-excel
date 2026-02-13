@@ -21,6 +21,7 @@ Cache Strategy:
     so short TTL balances freshness vs. performance.
 """
 
+import logging
 import os
 import re
 import threading
@@ -30,6 +31,16 @@ from typing import Any, NamedTuple
 
 import httpx
 import xloil as xlo
+
+# =============================================================================
+# Logging
+# =============================================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger("bondmaster_excel")
 
 # =============================================================================
 # Configuration
@@ -89,6 +100,7 @@ def _get_client() -> httpx.Client:
     global _client
     with _client_lock:
         if _client is None:
+            logger.info(f"Initializing HTTP client: base_url={API_BASE_URL}, timeout={REQUEST_TIMEOUT}s")
             _client = httpx.Client(base_url=API_BASE_URL, timeout=REQUEST_TIMEOUT)
         return _client
 
@@ -117,29 +129,39 @@ def _api_request(
             )
 
             if response.status_code == 200:
+                logger.debug(f"API request successful: {method} {path}")
                 return True, response.json()
             elif response.status_code == 404:
+                logger.warning(f"API returned 404: {method} {path}")
                 return False, "Not found"
             elif response.status_code == 403:
+                logger.error(f"API authentication failed: {method} {path}")
                 return False, "API key required"
             else:
+                logger.warning(f"API returned HTTP {response.status_code}: {method} {path}")
                 return False, f"HTTP {response.status_code}"
 
         except httpx.TimeoutException:
             if attempt < MAX_RETRIES:
+                logger.debug(f"Timeout on attempt {attempt + 1}, retrying: {method} {path}")
                 time.sleep(0.1 * (2 ** attempt))
                 continue
+            logger.error(f"API timeout after {MAX_RETRIES + 1} attempts: {method} {path}")
             return False, "Timeout - is BondMaster API running?"
 
         except httpx.ConnectError:
+            logger.error(f"Cannot connect to API: {method} {path} (base_url={API_BASE_URL})")
             return False, "Cannot connect - start API with: bondmaster serve"
 
         except httpx.RequestError as e:
             if attempt < MAX_RETRIES:
+                logger.debug(f"Network error on attempt {attempt + 1}, retrying: {type(e).__name__}")
                 time.sleep(0.1 * (2 ** attempt))
                 continue
+            logger.error(f"Network error after {MAX_RETRIES + 1} attempts: {type(e).__name__}")
             return False, f"Network error: {type(e).__name__}"
 
+    logger.error(f"Max retries exceeded: {method} {path}")
     return False, "Max retries exceeded"
 
 
@@ -198,14 +220,17 @@ class _TTLCache:
             entry = self._cache.get(key)
             if entry is None:
                 self._misses += 1
+                logger.debug(f"Cache miss: {key}")
                 return None
             if time.time() > entry.expires_at:
                 del self._cache[key]
                 self._misses += 1
+                logger.debug(f"Cache expired: {key}")
                 return None
             # Move to end (LRU)
             self._cache[key] = self._cache.pop(key)
             self._hits += 1
+            logger.debug(f"Cache hit: {key}")
             return entry.data
 
     def set(self, key: str, value: dict) -> None:
@@ -225,6 +250,7 @@ class _TTLCache:
             self._cache.clear()
             self._hits = 0
             self._misses = 0
+            logger.info(f"Cache cleared: {count} entries removed")
             return count
 
     def stats(self) -> dict:
@@ -248,6 +274,7 @@ def _fetch_bond(isin: str) -> dict | None:
     """Fetch bond with caching."""
     isin = _normalize_isin(isin)
     if not _is_valid_isin(isin):
+        logger.warning(f"Invalid ISIN format: {isin}")
         return None
 
     cached = _bond_cache.get(isin)
@@ -256,12 +283,14 @@ def _fetch_bond(isin: str) -> dict | None:
 
     success, data = _api_request("GET", f"/bonds/{isin}")
     if not success:
+        logger.debug(f"Failed to fetch bond: {isin}")
         return None
 
     # Handle envelope response
     bond = data.get("data", data) if isinstance(data, dict) else data
     if bond:
         _bond_cache.set(isin, bond)
+        logger.debug(f"Cached bond data: {isin}")
     return bond
 
 
