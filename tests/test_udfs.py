@@ -1254,3 +1254,150 @@ class TestBONDREFRESH:
         with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
             result = udfs.BONDREFRESH("US", "bad-key")
             assert is_error(result)
+
+
+# =============================================================================
+# Edge Cases and Helper Functions
+# =============================================================================
+
+class TestHelperFunctions:
+    """Tests for internal helper functions."""
+
+    def test_parse_date_with_z_timezone(self):
+        """Test _parse_date handles ISO format with Z timezone."""
+        result = udfs._parse_date("2025-01-15T10:30:00Z")
+        from datetime import date
+        assert result == date(2025, 1, 15)
+
+    def test_parse_date_with_invalid_string(self):
+        """Test _parse_date returns None for invalid date string."""
+        result = udfs._parse_date("not-a-date")
+        assert result is None
+
+    def test_parse_date_with_none(self):
+        """Test _parse_date returns None for None input."""
+        result = udfs._parse_date(None)
+        assert result is None
+
+    def test_parse_date_with_date_object(self):
+        """Test _parse_date returns date object as-is."""
+        from datetime import date
+        test_date = date(2025, 1, 15)
+        result = udfs._parse_date(test_date)
+        assert result == test_date
+
+    def test_normalize_isin_uppercase(self):
+        """Test _normalize_isin converts to uppercase."""
+        result = udfs._normalize_isin("gb00byzw3g56")
+        assert result == "GB00BYZW3G56"
+
+    def test_normalize_isin_strips_whitespace(self):
+        """Test _normalize_isin strips whitespace."""
+        result = udfs._normalize_isin("  GB00BYZW3G56  ")
+        assert result == "GB00BYZW3G56"
+
+
+class TestAPIRequestRetryLogic:
+    """Tests for API request retry logic edge cases."""
+
+    def test_max_retries_exceeded_on_request_error(self):
+        """Test max retries returns error after exhausting attempts."""
+        import httpx
+
+        attempt_count = [0]
+
+        def mock_get(url, params=None):
+            attempt_count[0] += 1
+            raise httpx.RequestError("Connection failed")
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            # This should try MAX_RETRIES + 1 times (3 total)
+            success, error = udfs._api_request("GET", "/test")
+            assert not success
+            assert "Network error" in error
+            # Should have attempted 3 times (initial + 2 retries)
+            assert attempt_count[0] == udfs.MAX_RETRIES + 1
+
+    def test_timeout_retries_then_fails(self):
+        """Test timeout retries then returns error."""
+        import httpx
+
+        attempt_count = [0]
+
+        def mock_get(url, params=None):
+            attempt_count[0] += 1
+            raise httpx.TimeoutException("Timeout")
+
+        with patch.object(udfs, "_get_client", return_value=MockClient(mock_get)):
+            success, error = udfs._api_request("GET", "/test")
+            assert not success
+            assert "Timeout" in error
+            assert attempt_count[0] == udfs.MAX_RETRIES + 1
+
+
+class TestCacheEdgeCases:
+    """Tests for cache edge cases."""
+
+    def test_cache_eviction_at_max_size(self):
+        """Test cache evicts oldest entry when at capacity."""
+        # Create a small cache for testing
+        small_cache = udfs._TTLCache(maxsize=2, ttl_seconds=300.0)
+        
+        # Fill to capacity
+        small_cache.set("key1", {"data": "value1"})
+        small_cache.set("key2", {"data": "value2"})
+        
+        # This should evict key1 (oldest)
+        small_cache.set("key3", {"data": "value3"})
+        
+        assert small_cache.get("key1") is None
+        assert small_cache.get("key2") == {"data": "value2"}
+        assert small_cache.get("key3") == {"data": "value3"}
+
+    def test_cache_updates_existing_key(self):
+        """Test cache updates value for existing key."""
+        cache = udfs._TTLCache(maxsize=10, ttl_seconds=300.0)
+        
+        cache.set("key1", {"data": "old"})
+        cache.set("key1", {"data": "new"})
+        
+        result = cache.get("key1")
+        assert result == {"data": "new"}
+
+    def test_cache_stats_with_no_requests(self):
+        """Test cache stats returns 0 hit rate with no requests."""
+        cache = udfs._TTLCache(maxsize=10, ttl_seconds=300.0)
+        stats = cache.stats()
+        
+        assert stats["hit_rate"] == 0.0
+        assert stats["hits"] == 0
+        assert stats["misses"] == 0
+
+
+class TestValidationEdgeCases:
+    """Tests for ISIN validation edge cases."""
+
+    def test_bondisinvalid_empty_string(self):
+        """Test BONDISINVALID returns False for empty string."""
+        result = udfs.BONDISINVALID("")
+        assert result is False
+
+    def test_bondisinvalid_too_short(self):
+        """Test BONDISINVALID returns False for short ISIN."""
+        result = udfs.BONDISINVALID("GB00BYZ")
+        assert result is False
+
+    def test_bondisinvalid_invalid_country_code(self):
+        """Test BONDISINVALID returns False for invalid country."""
+        result = udfs.BONDISINVALID("ZZ0001234567")
+        assert result is False
+
+    def test_bondisinvalid_eurobond_prefix(self):
+        """Test BONDISINVALID accepts XS prefix (Eurobonds)."""
+        result = udfs.BONDISINVALID("XS1234567890")
+        assert result is True
+
+    def test_bondisinvalid_eu_prefix(self):
+        """Test BONDISINVALID accepts EU prefix."""
+        result = udfs.BONDISINVALID("EU1234567890")
+        assert result is True
