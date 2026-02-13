@@ -181,10 +181,20 @@ class _CacheEntry(NamedTuple):
 
 
 class _TTLCache:
-    """Thread-safe TTL-aware LRU cache."""
+    """Thread-safe TTL-aware LRU cache.
+    
+    Complexity:
+        - get: O(1) average (dict lookup + LRU reorder)
+        - set: O(1) average (dict operations)
+        - clear: O(n) where n = number of cached entries
+        - stats: O(1) (arithmetic only)
+    """
 
-    def __init__(self, maxsize: int = 500, ttl_seconds: float = 300.0):
-        """Initialize cache with size limit and TTL for entries."""
+    def __init__(self, maxsize: int = 500, ttl_seconds: float = 300.0) -> None:
+        """Initialize cache with size limit and TTL for entries.
+        
+        Complexity: O(1)
+        """
         self._cache: dict[str, _CacheEntry] = {}
         self._maxsize = maxsize
         self._ttl = ttl_seconds
@@ -193,7 +203,12 @@ class _TTLCache:
         self._misses = 0
 
     def get(self, key: str) -> dict | None:
-        """Get value if present and not expired, updating LRU order."""
+        """Get value if present and not expired, updating LRU order.
+        
+        Complexity: O(1) average
+            - dict.get(): O(1)
+            - pop() + insert at end: O(1) average for dict
+        """
         with self._lock:
             entry = self._cache.get(key)
             if entry is None:
@@ -209,7 +224,12 @@ class _TTLCache:
             return entry.data
 
     def set(self, key: str, value: dict) -> None:
-        """Store value with TTL, evicting oldest if at capacity."""
+        """Store value with TTL, evicting oldest if at capacity.
+        
+        Complexity: O(1) average
+            - dict operations: O(1) average
+            - next(iter()): O(1) for dict (insertion-ordered since Python 3.7)
+        """
         with self._lock:
             if key in self._cache:
                 del self._cache[key]
@@ -219,7 +239,10 @@ class _TTLCache:
             self._cache[key] = _CacheEntry(value, time.time() + self._ttl)
 
     def clear(self) -> int:
-        """Clear all entries and reset hit/miss counters. Returns count cleared."""
+        """Clear all entries and reset hit/miss counters. Returns count cleared.
+        
+        Complexity: O(n) where n = number of cached entries
+        """
         with self._lock:
             count = len(self._cache)
             self._cache.clear()
@@ -228,7 +251,10 @@ class _TTLCache:
             return count
 
     def stats(self) -> dict:
-        """Return cache statistics: size, hit rate, TTL."""
+        """Return cache statistics: size, hit rate, TTL.
+        
+        Complexity: O(1) (arithmetic operations only)
+        """
         with self._lock:
             total = self._hits + self._misses
             return {
