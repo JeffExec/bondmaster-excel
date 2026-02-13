@@ -184,6 +184,7 @@ class _TTLCache:
     """Thread-safe TTL-aware LRU cache."""
 
     def __init__(self, maxsize: int = 500, ttl_seconds: float = 300.0):
+        """Initialize cache with size limit and TTL for entries."""
         self._cache: dict[str, _CacheEntry] = {}
         self._maxsize = maxsize
         self._ttl = ttl_seconds
@@ -192,6 +193,7 @@ class _TTLCache:
         self._misses = 0
 
     def get(self, key: str) -> dict | None:
+        """Get value if present and not expired, updating LRU order."""
         with self._lock:
             entry = self._cache.get(key)
             if entry is None:
@@ -207,6 +209,7 @@ class _TTLCache:
             return entry.data
 
     def set(self, key: str, value: dict) -> None:
+        """Store value with TTL, evicting oldest if at capacity."""
         with self._lock:
             if key in self._cache:
                 del self._cache[key]
@@ -216,6 +219,7 @@ class _TTLCache:
             self._cache[key] = _CacheEntry(value, time.time() + self._ttl)
 
     def clear(self) -> int:
+        """Clear all entries and reset hit/miss counters. Returns count cleared."""
         with self._lock:
             count = len(self._cache)
             self._cache.clear()
@@ -224,6 +228,7 @@ class _TTLCache:
             return count
 
     def stats(self) -> dict:
+        """Return cache statistics: size, hit rate, TTL."""
         with self._lock:
             total = self._hits + self._misses
             return {
