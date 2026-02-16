@@ -22,9 +22,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           python -m pip install --upgrade pip
-          pip install git+https://github.com/JeffExec/bond-master.git
+          pip install git+https://${GH_PAT}@github.com/JeffExec/bond-master.git
           pip install -e ".[dev]"
 
       - name: Run tests with coverage
@@ -65,9 +67,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           python -m pip install --upgrade pip
-          pip install git+https://github.com/JeffExec/bond-master.git
+          pip install git+https://${GH_PAT}@github.com/JeffExec/bond-master.git
           pip install -e ".[dev]"
           pip install mypy
 
