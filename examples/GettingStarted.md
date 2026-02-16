@@ -3,8 +3,11 @@
 ## Quick Setup (5 minutes)
 
 ### Step 1: Install BondMaster
+
+> **Note:** Both packages are on GitHub, not PyPI.
+
 ```powershell
-pip install bondmaster bondmaster-excel
+pip install git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
 ```
 
 ### Step 2: Load Bond Data

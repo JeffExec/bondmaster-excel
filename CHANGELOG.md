@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **xlOil 0.21 compatibility:** Removed `category` parameter from `@xlo.func` decorators (was causing TypeError on module load)
+- **Installation docs:** Fixed pip install instructions (packages are on GitHub, not PyPI)
+- **xlOil config:** Corrected LoadModules to use `bondmaster_excel.udfs` instead of `bondmaster_excel`
+
 ### Added
 - **Analytics Functions**: BONDYEARSTOMAT, BONDMATURITYRANGE, BONDCOUPONFREQ, BONDISLINKER
 - **Enterprise Functions**: BONDLINEAGE, BONDHISTORY, BONDACTIONS, BONDREFRESH
