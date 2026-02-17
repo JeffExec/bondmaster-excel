@@ -63,8 +63,27 @@ python -m venv .venv
 
 #### Step 2: Install packages from GitHub
 
+> ⚠️ **Authentication Required:** The `bond-master` repository is private. You need a GitHub Personal Access Token (PAT) to install it.
+
+**Option A: Use GitHub CLI (recommended)**
 ```powershell
+# Install GitHub CLI if you haven't: https://cli.github.com/
+gh auth login
 pip install git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
+```
+
+**Option B: Use a Personal Access Token**
+```powershell
+# Create a PAT at https://github.com/settings/tokens with 'repo' scope
+# Then use it in the URL (replace YOUR_TOKEN):
+pip install git+https://YOUR_TOKEN@github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
+```
+
+**Option C: Clone and install locally**
+```powershell
+git clone https://github.com/JeffExec/bond-master.git
+pip install ./bond-master xlOil httpx
+pip install git+https://github.com/JeffExec/bondmaster-excel.git
 ```
 
 #### Step 3: Install xlOil into Excel
@@ -129,8 +148,11 @@ Keep this terminal open while using Excel.
 
 For Windows servers or users who don't need isolated environments:
 
+> ⚠️ **Authentication Required:** See Step 2 above for GitHub authentication options (the `bond-master` repo is private).
+
 ```powershell
 # Install packages (uses user site-packages if no admin)
+# Use gh auth login first, or include your PAT in the URL
 pip install --user git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
 ```
 
