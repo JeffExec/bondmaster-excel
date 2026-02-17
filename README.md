@@ -142,8 +142,10 @@ if (-not (Test-Path "$env:APPDATA\Microsoft\Excel\XLSTART")) {
 xloil install
 
 # Edit config: %APPDATA%\xlOil\xlOil.ini
-# Add to [xlOil_Python] section:
+# In [xlOil_Python] section, add:
 #   LoadModules=["xloil.xloil_ribbon", "bondmaster_excel.udfs"]
+# Note: For system-wide Python, xlOil auto-detects it. If not, add:
+#   PYTHONEXECUTABLE="C:\Program Files\Python312\python.exe"
 
 # Load data and start server
 bondmaster fetch --seed-only
