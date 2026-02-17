@@ -301,7 +301,10 @@ pip install --upgrade git+https://github.com/JeffExec/bondmaster-excel.git
 | `BONDINFO(isin, headers)` | Get all fields as row | `=BONDINFO("GB00BYZW3G56", TRUE)` |
 | `BONDLIST(country, type)` | List ISINs by country | `=BONDLIST("DE", "NOMINAL")` |
 | `BONDSEARCH(f1, v1, ...)` | Search with filters | `=BONDSEARCH("country", "US", "security_type", "INDEX_LINKED")` |
+| `BONDNAMESEARCH(query)` | Search by bond name (v2.0) | `=BONDNAMESEARCH("OATEI 2030")` |
 | `BONDCOUNT(country)` | Count bonds | `=BONDCOUNT("GB")` |
+
+> **v2.0 Auto-Lookup:** When you request a bond that isn't in the database, the cell will show "🔄 Looking up..." while the API fetches it in the background. Refresh the cell after a few seconds to see the result.
 
 ### Analytics Functions
 
