@@ -35,12 +35,21 @@
 ## 🚀 Installation (Windows)
 
 ### Prerequisites
-- Windows 10/11
+
+- Windows 10/11 or Windows Server 2019+
 - Microsoft Excel (desktop version, not web)
 - Python 3.11 or 3.12
 - Git (for cloning repositories)
 
-### Step 1: Create a project folder and virtual environment
+> ⚠️ **Architecture must match:** If your Excel is 64-bit (most common), you need 64-bit Python.
+> Check Excel: File → Account → About Excel → look for "64-bit" or "32-bit".
+> Check Python: `python -c "import struct; print(struct.calcsize('P')*8, 'bit')"`
+
+---
+
+### Option A: Virtual Environment (Recommended for developers)
+
+#### Step 1: Create a project folder and virtual environment
 
 Open **PowerShell** and run:
 
@@ -52,81 +61,96 @@ python -m venv .venv
 .venv\Scripts\activate
 ```
 
-### Step 2: Install packages from GitHub
-
-Both `bondmaster` (the core library) and `bondmaster-excel` (the Excel add-in) are installed from GitHub:
+#### Step 2: Install packages from GitHub
 
 ```powershell
 pip install git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
 ```
 
-### Step 3: Install xlOil into Excel
+#### Step 3: Install xlOil into Excel
 
 ```powershell
 xloil install
 ```
 
-This registers xlOil with Excel. You should see:
+You should see:
 ```
 Installed C:\Users\<you>\AppData\Roaming\Microsoft\Excel\XLSTART\xlOil.xll
-Edited C:\Users\<you>\AppData\Roaming\xlOil\xlOil.ini to point to <your-venv> python distribution.
 ```
 
-### Step 4: Configure xlOil to load bondmaster-excel
+> **Note:** If the XLSTART folder doesn't exist, create it manually first:
+> ```powershell
+> mkdir "$env:APPDATA\Microsoft\Excel\XLSTART"
+> ```
 
-Open the xlOil config file at:
-```
-%APPDATA%\xlOil\xlOil.ini
-```
+#### Step 4: Configure xlOil
 
-#### 4a. Add the Python path
+Open the xlOil config file at `%APPDATA%\xlOil\xlOil.ini`.
 
-Find the `[[xlOil_Python.Environment]]` section with `XLOIL_PYTHON_PATH` and change it to point to your venv's site-packages:
+Find and update these sections:
 
-```ini
-XLOIL_PYTHON_PATH='''C:\Users\<you>\PythonProjects\bondmaster-excel\.venv\Lib\site-packages'''
-```
-
-> **Important:** Use triple single quotes `'''` for paths (TOML literal strings), not double quotes.
-
-#### 4b. Add bondmaster_excel to LoadModules
-
-Find the `[xlOil_Python]` section and update `LoadModules`:
-
-```ini
+```toml
 [xlOil_Python]
 LoadModules=["xloil.xloil_ribbon", "bondmaster_excel.udfs"]
+
+[[xlOil_Python.Environment]]
+XLOIL_PYTHON_PATH='''C:\Users\<you>\PythonProjects\bondmaster-excel\.venv\Lib\site-packages'''
+
+[[xlOil_Python.Environment]]
+PYTHONEXECUTABLE='''C:\Users\<you>\PythonProjects\bondmaster-excel\.venv\Scripts\python.exe'''
 ```
 
-> **Important:** Use `bondmaster_excel.udfs` (not just `bondmaster_excel`) — the functions are in the `udfs` submodule.
+> **Important:** Use triple single quotes `'''` for paths with spaces (TOML literal strings).
 
-### Step 5: Load bond data
+#### Step 5: Load bond data
 
 ```powershell
 bondmaster fetch --seed-only
 ```
 
-This downloads reference data for all supported markets (~1000 bonds).
-
-### Step 6: Start the API server
+#### Step 6: Start the API server
 
 ```powershell
 bondmaster serve
 ```
 
-**Keep this terminal open** while using Excel. You should see:
+Keep this terminal open while using Excel.
+
+#### Step 7: Open Excel and test
+
+1. Open Excel normally (from Start menu or double-click a file)
+2. Look for the **xlOil Py** tab in the ribbon
+3. In any cell: `=BONDAPI_STATUS()`
+4. If you see **✓ Connected** — you're done! 🎉
+
+---
+
+### Option B: System-wide Install (Simpler for servers/non-developers)
+
+For Windows servers or users who don't need isolated environments:
+
+```powershell
+# Install globally (no venv)
+pip install git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
+
+# Create XLSTART folder if needed
+if (-not (Test-Path "$env:APPDATA\Microsoft\Excel\XLSTART")) {
+    mkdir "$env:APPDATA\Microsoft\Excel\XLSTART"
+}
+
+# Install xlOil
+xloil install
+
+# Edit config: %APPDATA%\xlOil\xlOil.ini
+# In [xlOil_Python] section, add:
+#   LoadModules=["xloil.xloil_ribbon", "bondmaster_excel.udfs"]
+# Note: For system-wide Python, xlOil auto-detects it. If not, add:
+#   PYTHONEXECUTABLE="C:\Program Files\Python312\python.exe"
+
+# Load data and start server
+bondmaster fetch --seed-only
+bondmaster serve
 ```
-INFO:     Uvicorn running on http://127.0.0.1:8000
-```
-
-### Step 7: Open Excel and test
-
-1. Open Excel
-2. Look for the **xlOil Py** tab in the ribbon (confirms xlOil loaded)
-3. In any cell, type: `=BONDAPI_STATUS()`
-4. Press Enter
-
-If you see **✓ Connected** — you're done! 🎉
 
 ---
 
@@ -134,36 +158,110 @@ If you see **✓ Connected** — you're done! 🎉
 
 ### xlOil ribbon tab doesn't appear
 
-1. Check Excel Add-ins: File → Options → Add-ins → Manage "Excel Add-ins" → Go
-2. Is xlOil.xll listed and checked? If unchecked, Excel disabled it after a crash.
-3. Re-run `xloil install` and restart Excel.
-
-### "Error parsing settings file" on Excel startup
-
-Your `xlOil.ini` has a syntax error. Common issues:
-- **Use triple quotes for paths:** `'''C:\path\to\folder'''` (not `"C:\path..."`)
-- **Escape backslashes in double quotes:** `"C:\\path\\to\\folder"` OR use triple quotes
+1. **Check Excel Add-ins:** File → Options → Add-ins → Manage "Excel Add-ins" → Go
+2. Is xlOil.xll listed and checked? If unchecked, Excel disabled it.
+3. **Re-run install:**
+   ```powershell
+   xloil install
+   ```
+4. **Restart Excel** (close all Excel windows completely)
 
 ### Functions show #NAME? error
 
-The module failed to load. Click **Open Log** in the xlOil ribbon to see the error.
+The Python module failed to load. Check the xlOil log:
+- Click **Open Log** in the xlOil ribbon, OR
+- Check `%APPDATA%\xlOil\xloil.log`
 
 **Common causes:**
-1. **Wrong LoadModules:** Must be `bondmaster_excel.udfs`, not `bondmaster_excel`
-2. **Path not set:** `XLOIL_PYTHON_PATH` must point to your venv's `site-packages`
-3. **Import error:** Test with `python -c "import bondmaster_excel.udfs"` in your venv
+
+1. **Wrong LoadModules value:**
+   ```toml
+   # ❌ Wrong
+   LoadModules=["bondmaster_excel"]
+   
+   # ✅ Correct
+   LoadModules=["xloil.xloil_ribbon", "bondmaster_excel.udfs"]
+   ```
+
+2. **XLOIL_PYTHON_PATH not set:** Must point to your `site-packages` folder.
+
+3. **Python can't import the module:** Test in terminal:
+   ```powershell
+   python -c "import bondmaster_excel.udfs; print('OK')"
+   ```
+
+4. **Missing xlOil DLLs:** If log shows DLL errors, copy the supporting files:
+   ```powershell
+   $src = (pip show xloil | Select-String "Location").Line.Split(": ")[1]
+   $src = "$src\share\xloil"
+   $dst = "$env:APPDATA\Microsoft\Excel\XLSTART"
+   
+   Copy-Item "$src\xlOil.dll" $dst
+   Copy-Item "$src\xlOil_Python.dll" $dst
+   Copy-Item "$src\xlOil_Utils.dll" $dst
+   
+   # Copy the PYD matching your Python version:
+   # Python 3.12: xlOil_Python312.pyd
+   # Python 3.11: xlOil_Python311.pyd
+   Copy-Item "$src\xlOil_Python312.pyd" $dst
+   ```
+
+### "Error parsing settings file" on Excel startup
+
+Your `xlOil.ini` has a TOML syntax error.
+
+**Quick fix:** Start fresh from the default config (⚠️ backs up your existing config first):
+```powershell
+$src = (pip show xloil | Select-String "Location").Line.Split(": ")[1]
+$cfg = "$env:APPDATA\xlOil\xlOil.ini"
+if (Test-Path $cfg) { Copy-Item $cfg "$cfg.bak" }  # Backup existing
+Copy-Item "$src\share\xloil\xlOil.ini" $cfg
+```
+
+Then add `bondmaster_excel.udfs` to the `LoadModules` line.
+
+**Common syntax issues:**
+- Use `'''triple quotes'''` for paths with spaces
+- Use `["array", "syntax"]` for lists
+- Section names are case-sensitive: `[xlOil_Python]` not `[xloil_python]`
 
 ### "Cannot connect" error in cells
 
-The API server isn't running. Open a new terminal, activate your venv, and run:
+The API server isn't running.
+
 ```powershell
-.venv\Scripts\activate
+# In a new terminal:
+.venv\Scripts\activate  # if using venv
 bondmaster serve
 ```
 
+### No log file created at all
+
+xlOil core isn't loading. Check:
+
+1. **Architecture mismatch:** 64-bit Excel needs 64-bit Python
+2. **Missing Visual C++ Redistributable:** Install from [Microsoft](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+3. **XLL blocked by Windows:** Right-click xlOil.xll → Properties → Unblock
+
+### xlOil loads but bondmaster functions missing
+
+Check the log for import errors. Common issues:
+
+1. **bondmaster package not installed:**
+   ```powershell
+   pip install git+https://github.com/JeffExec/bond-master.git
+   ```
+
+2. **httpx not installed:**
+   ```powershell
+   pip install httpx
+   ```
+
 ### xlOil Log shows "TypeError: func() got an unexpected keyword argument 'category'"
 
-Your xlOil version doesn't support the `category` parameter. Update bondmaster-excel:
+You have an older bondmaster-excel with xlOil 0.21+. The `category` parameter was removed in xlOil 0.21.
+
+**Fix:** Update bondmaster-excel:
 ```powershell
 pip install --upgrade git+https://github.com/JeffExec/bondmaster-excel.git
 ```
