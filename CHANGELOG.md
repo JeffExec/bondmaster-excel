@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-02-17
+
+### Added
+- **bond-master v2.0 API support**:
+  - Handle 202 responses (auto-lookup in progress)
+  - Show "🔄 Looking up..." while background search runs
+  - Show "⚠️ Not found after search" when lookup exhausted
+- **BONDNAMESEARCH function**: Search bonds by name using full-text search
+  - Example: `=BONDNAMESEARCH("OATEI 2030")` returns matching ISINs
+  - Uses new `/v1/search` API endpoint
+- **Auto-lookup UX**: BONDSTATIC and BONDINFO now trigger auto-lookup for unknown ISINs
+
+### Changed
+- `_api_request()` now handles 202 status codes
+- `_fetch_bond()` returns status dict when lookup is in progress
+- BONDHELP updated to include BONDNAMESEARCH
+
+### Compatibility
+- Requires bond-master v0.3.0+ for full auto-lookup functionality
+- Backwards compatible with v0.2.x (no auto-lookup, returns not found)
+
 ### Fixed
 - **xlOil 0.21 compatibility:** Removed `category` parameter from `@xlo.func` decorators (was causing TypeError on module load)
 - **Installation docs:** Fixed pip install instructions (packages are on GitHub, not PyPI)
