@@ -539,7 +539,7 @@ class TestBONDCOUNT:
 # BONDAPI_STATUS Tests
 # =============================================================================
 
-class TestBONDAPI_STATUS:
+class TestBondApiStatus:
     """Tests for BONDAPI_STATUS function."""
 
     def test_connected(self):
@@ -580,7 +580,7 @@ class TestBONDAPI_STATUS:
 # BONDCACHE_CLEAR Tests
 # =============================================================================
 
-class TestBONDCACHE_CLEAR:
+class TestBondCacheClear:
     """Tests for BONDCACHE_CLEAR function."""
 
     def test_clears_cache(self):
@@ -609,7 +609,7 @@ class TestBONDCACHE_CLEAR:
 # BONDCACHE_STATS Tests
 # =============================================================================
 
-class TestBONDCACHE_STATS:
+class TestBondCacheStats:
     """Tests for BONDCACHE_STATS function."""
 
     def test_returns_stats_string(self):
