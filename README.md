@@ -130,27 +130,50 @@ Keep this terminal open while using Excel.
 For Windows servers or users who don't need isolated environments:
 
 ```powershell
-# Install globally (no venv)
-pip install git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
-
-# Create XLSTART folder if needed
-if (-not (Test-Path "$env:APPDATA\Microsoft\Excel\XLSTART")) {
-    mkdir "$env:APPDATA\Microsoft\Excel\XLSTART"
-}
-
-# Install xlOil
-xloil install
-
-# Edit config: %APPDATA%\xlOil\xlOil.ini
-# In [xlOil_Python] section, add:
-#   LoadModules=["xloil.xloil_ribbon", "bondmaster_excel.udfs"]
-# Note: For system-wide Python, xlOil auto-detects it. If not, add:
-#   PYTHONEXECUTABLE="C:\Program Files\Python312\python.exe"
-
-# Load data and start server
-bondmaster fetch --seed-only
-bondmaster serve
+# Install packages (uses user site-packages if no admin)
+pip install --user git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
 ```
+
+> ⚠️ **PATH issue:** pip installs scripts to a folder not in PATH. Find your Scripts folder:
+> ```powershell
+> pip show xloil | Select-String "Location"
+> # Example output: Location: C:\Users\<you>\AppData\Roaming\Python\Python312\site-packages
+> # Scripts are at: C:\Users\<you>\AppData\Roaming\Python\Python312\Scripts
+> ```
+
+```powershell
+# Set Scripts path for this session (adjust path from above)
+$scripts = "$env:APPDATA\Python\Python312\Scripts"
+
+# For user installs, set XLOIL_BIN_DIR (binaries are in a different location)
+$env:XLOIL_BIN_DIR = "$env:APPDATA\Python\share\xloil"
+
+# Close Excel first, then install xlOil
+& "$scripts\xloil.exe" install
+```
+
+**Edit config:** Open `%APPDATA%\xlOil\xlOil.ini` and update:
+
+```toml
+[xlOil_Python]
+LoadModules=["xloil.xloil_ribbon", "bondmaster_excel.udfs"]
+
+[[xlOil_Python.Environment]]
+# Point to YOUR user site-packages (not a venv)
+XLOIL_PYTHON_PATH='''C:\Users\<you>\AppData\Roaming\Python\Python312\site-packages'''
+```
+
+```powershell
+# Load data and start server
+& "$scripts\bondmaster.exe" fetch --seed-only
+& "$scripts\bondmaster.exe" serve
+```
+
+> 💡 **Tip:** To avoid typing full paths, add Scripts to PATH permanently:
+> ```powershell
+> [Environment]::SetEnvironmentVariable("PATH", "$env:PATH;$scripts", "User")
+> # Restart PowerShell after this
+> ```
 
 ---
 
