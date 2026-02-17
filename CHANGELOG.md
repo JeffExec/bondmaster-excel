@@ -11,6 +11,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Installation docs:** Fixed pip install instructions (packages are on GitHub, not PyPI)
 - **xlOil config:** Corrected LoadModules to use `bondmaster_excel.udfs` instead of `bondmaster_excel`
 
+### Improved
+- **Installation guide overhaul** (battle-tested on Windows Server 2025):
+  - Added architecture matching warning (64-bit Excel ↔ 64-bit Python)
+  - Added Option B for system-wide install (simpler for servers)
+  - Added XLSTART folder creation step
+  - Added xlOil DLL copy instructions for missing dependency errors
+  - Added Visual C++ Redistributable requirement
+  - Added Windows security unblock note for downloaded XLLs
+  - Expanded troubleshooting with more error scenarios
+
 ### Added
 - **Analytics Functions**: BONDYEARSTOMAT, BONDMATURITYRANGE, BONDCOUPONFREQ, BONDISLINKER
 - **Enterprise Functions**: BONDLINEAGE, BONDHISTORY, BONDACTIONS, BONDREFRESH

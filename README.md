@@ -249,6 +249,15 @@ Check the log for import errors. Common issues:
    pip install httpx
    ```
 
+### xlOil Log shows "TypeError: func() got an unexpected keyword argument 'category'"
+
+You have an older bondmaster-excel with xlOil 0.21+. The `category` parameter was removed in xlOil 0.21.
+
+**Fix:** Update bondmaster-excel:
+```powershell
+pip install --upgrade git+https://github.com/JeffExec/bondmaster-excel.git
+```
+
 ---
 
 ## 📖 Function Reference
