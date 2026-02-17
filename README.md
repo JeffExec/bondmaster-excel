@@ -196,18 +196,24 @@ The Python module failed to load. Check the xlOil log:
    
    Copy-Item "$src\xlOil.dll" $dst
    Copy-Item "$src\xlOil_Python.dll" $dst
-   Copy-Item "$src\xlOil_Python312.pyd" $dst  # or Python311.pyd
    Copy-Item "$src\xlOil_Utils.dll" $dst
+   
+   # Copy the PYD matching your Python version:
+   # Python 3.12: xlOil_Python312.pyd
+   # Python 3.11: xlOil_Python311.pyd
+   Copy-Item "$src\xlOil_Python312.pyd" $dst
    ```
 
 ### "Error parsing settings file" on Excel startup
 
 Your `xlOil.ini` has a TOML syntax error.
 
-**Quick fix:** Start fresh from the default config:
+**Quick fix:** Start fresh from the default config (⚠️ backs up your existing config first):
 ```powershell
 $src = (pip show xloil | Select-String "Location").Line.Split(": ")[1]
-Copy-Item "$src\share\xloil\xlOil.ini" "$env:APPDATA\xlOil\xlOil.ini"
+$cfg = "$env:APPDATA\xlOil\xlOil.ini"
+if (Test-Path $cfg) { Copy-Item $cfg "$cfg.bak" }  # Backup existing
+Copy-Item "$src\share\xloil\xlOil.ini" $cfg
 ```
 
 Then add `bondmaster_excel.udfs` to the `LoadModules` line.
