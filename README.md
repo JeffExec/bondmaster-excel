@@ -63,8 +63,27 @@ python -m venv .venv
 
 #### Step 2: Install packages from GitHub
 
+> ⚠️ **Authentication Required:** The `bond-master` repository is private. You need a GitHub Personal Access Token (PAT) to install it.
+
+**Option A: Use GitHub CLI (recommended)**
 ```powershell
+# Install GitHub CLI if you haven't: https://cli.github.com/
+gh auth login
 pip install git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
+```
+
+**Option B: Use a Personal Access Token**
+```powershell
+# Create a PAT at https://github.com/settings/tokens with 'repo' scope
+# Then use it in the URL (replace YOUR_TOKEN):
+pip install git+https://YOUR_TOKEN@github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
+```
+
+**Option C: Clone and install locally**
+```powershell
+git clone https://github.com/JeffExec/bond-master.git
+pip install ./bond-master xlOil httpx
+pip install git+https://github.com/JeffExec/bondmaster-excel.git
 ```
 
 #### Step 3: Install xlOil into Excel
@@ -129,28 +148,54 @@ Keep this terminal open while using Excel.
 
 For Windows servers or users who don't need isolated environments:
 
+> ⚠️ **Authentication Required:** See Step 2 above for GitHub authentication options (the `bond-master` repo is private).
+
 ```powershell
-# Install globally (no venv)
-pip install git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
-
-# Create XLSTART folder if needed
-if (-not (Test-Path "$env:APPDATA\Microsoft\Excel\XLSTART")) {
-    mkdir "$env:APPDATA\Microsoft\Excel\XLSTART"
-}
-
-# Install xlOil
-xloil install
-
-# Edit config: %APPDATA%\xlOil\xlOil.ini
-# In [xlOil_Python] section, add:
-#   LoadModules=["xloil.xloil_ribbon", "bondmaster_excel.udfs"]
-# Note: For system-wide Python, xlOil auto-detects it. If not, add:
-#   PYTHONEXECUTABLE="C:\Program Files\Python312\python.exe"
-
-# Load data and start server
-bondmaster fetch --seed-only
-bondmaster serve
+# Install packages (uses user site-packages if no admin)
+# Use gh auth login first, or include your PAT in the URL
+pip install --user git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
 ```
+
+> ⚠️ **PATH issue:** pip installs scripts to a folder not in PATH. Find your Scripts folder:
+> ```powershell
+> pip show xloil | Select-String "Location"
+> # Example output: Location: C:\Users\<you>\AppData\Roaming\Python\Python312\site-packages
+> # Scripts are at: C:\Users\<you>\AppData\Roaming\Python\Python312\Scripts
+> ```
+
+```powershell
+# Set Scripts path for this session (adjust path from above)
+$scripts = "$env:APPDATA\Python\Python312\Scripts"
+
+# For user installs, set XLOIL_BIN_DIR (binaries are in a different location)
+$env:XLOIL_BIN_DIR = "$env:APPDATA\Python\share\xloil"
+
+# Close Excel first, then install xlOil
+& "$scripts\xloil.exe" install
+```
+
+**Edit config:** Open `%APPDATA%\xlOil\xlOil.ini` and update:
+
+```toml
+[xlOil_Python]
+LoadModules=["xloil.xloil_ribbon", "bondmaster_excel.udfs"]
+
+[[xlOil_Python.Environment]]
+# Point to YOUR user site-packages (not a venv)
+XLOIL_PYTHON_PATH='''C:\Users\<you>\AppData\Roaming\Python\Python312\site-packages'''
+```
+
+```powershell
+# Load data and start server
+& "$scripts\bondmaster.exe" fetch --seed-only
+& "$scripts\bondmaster.exe" serve
+```
+
+> 💡 **Tip:** To avoid typing full paths, add Scripts to PATH permanently:
+> ```powershell
+> [Environment]::SetEnvironmentVariable("PATH", "$env:PATH;$scripts", "User")
+> # Restart PowerShell after this
+> ```
 
 ---
 
@@ -278,7 +323,10 @@ pip install --upgrade git+https://github.com/JeffExec/bondmaster-excel.git
 | `BONDINFO(isin, headers)` | Get all fields as row | `=BONDINFO("GB00BYZW3G56", TRUE)` |
 | `BONDLIST(country, type)` | List ISINs by country | `=BONDLIST("DE", "NOMINAL")` |
 | `BONDSEARCH(f1, v1, ...)` | Search with filters | `=BONDSEARCH("country", "US", "security_type", "INDEX_LINKED")` |
+| `BONDNAMESEARCH(query)` | Search by bond name (v2.0) | `=BONDNAMESEARCH("OATEI 2030")` |
 | `BONDCOUNT(country)` | Count bonds | `=BONDCOUNT("GB")` |
+
+> **v2.0 Auto-Lookup:** When you request a bond that isn't in the database, the cell will show "🔄 Looking up..." while the API fetches it in the background. Refresh the cell after a few seconds to see the result.
 
 ### Analytics Functions
 

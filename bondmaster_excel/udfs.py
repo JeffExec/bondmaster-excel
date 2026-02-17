@@ -116,6 +116,12 @@ def _api_request(
     Make API request with retry logic.
     
     Returns: (success: bool, data_or_error: Any)
+    
+    Status codes:
+        200: Success, returns data
+        202: Lookup queued (bond not found, background fetch started)
+        404: Not found (with auto_lookup=false or after lookup exhausted)
+        403: Authentication required
     """
     for attempt in range(MAX_RETRIES + 1):
         try:
@@ -131,6 +137,12 @@ def _api_request(
             if response.status_code == 200:
                 logger.debug(f"API request successful: {method} {path}")
                 return True, response.json()
+            elif response.status_code == 202:
+                # Lookup queued - bond not in DB, background fetch started
+                logger.info(f"API returned 202 (lookup queued): {method} {path}")
+                data = response.json()
+                # Return special status so callers can show "Looking up..."
+                return False, {"_status": "looking_up", "job_id": data.get("job_id")}
             elif response.status_code == 404:
                 logger.warning(f"API returned 404: {method} {path}")
                 return False, "Not found"
@@ -297,7 +309,14 @@ _bond_cache = _TTLCache(maxsize=CACHE_MAX_SIZE, ttl_seconds=CACHE_TTL_SECONDS)
 
 
 def _fetch_bond(isin: str) -> dict | None:
-    """Fetch bond with caching."""
+    """
+    Fetch bond with caching.
+    
+    Returns:
+        dict: Bond data if found
+        None: Bond not found
+        {"_status": "looking_up", ...}: Lookup in progress
+    """
     isin = _normalize_isin(isin)
     if not _is_valid_isin(isin):
         logger.warning(f"Invalid ISIN format: {isin}")
@@ -308,7 +327,12 @@ def _fetch_bond(isin: str) -> dict | None:
         return cached
 
     success, data = _api_request("GET", f"/bonds/{isin}")
+    
     if not success:
+        # Check if this is a "looking_up" status
+        if isinstance(data, dict) and data.get("_status") == "looking_up":
+            logger.info(f"Bond lookup in progress: {isin}, job_id={data.get('job_id')}")
+            return data  # Return the status dict
         logger.debug(f"Failed to fetch bond: {isin}")
         return None
 
@@ -318,6 +342,11 @@ def _fetch_bond(isin: str) -> dict | None:
         _bond_cache.set(isin, bond)
         logger.debug(f"Cached bond data: {isin}")
     return bond
+
+
+def _is_lookup_status(bond: dict | None) -> bool:
+    """Check if bond result is a lookup status (not actual bond data)."""
+    return isinstance(bond, dict) and bond.get("_status") == "looking_up"
 
 
 def _format_error(msg: str) -> str:
@@ -359,6 +388,12 @@ def BONDSTATIC(isin: str, field: str) -> xlo.ExcelValue:
         =BONDSTATIC("GB00BYZW3G56", "coupon_rate")   → 1.5
         =BONDSTATIC("US912810TM58", "maturity_date") → 2054-02-15
         =BONDSTATIC("DE0001102580", "issuer")        → Federal Republic of Germany
+    
+    AUTO-LOOKUP:
+        For unknown ISINs, the API automatically searches data sources.
+        While searching: → "🔄 Looking up..."
+        If not found:    → "⚠️ Not found after search"
+        Recalculate (F9) to check for updates.
     """
     if not isin or not field:
         return _format_error("ISIN and field required")
@@ -368,8 +403,13 @@ def BONDSTATIC(isin: str, field: str) -> xlo.ExcelValue:
         return _format_error(f"Invalid ISIN format: {isin}")
 
     bond = _fetch_bond(isin)
+    
+    # Check if lookup is in progress
+    if _is_lookup_status(bond):
+        return "🔄 Looking up..."
+    
     if bond is None:
-        return _format_error(f"Bond not found: {isin}")
+        return _format_error(f"Not found after search: {isin}")
 
     # Field aliases
     field = field.lower().strip()
@@ -424,8 +464,13 @@ def BONDINFO(isin: str, with_headers: bool = False) -> xlo.ExcelValue:
         return _format_error(f"Invalid ISIN: {isin}")
 
     bond = _fetch_bond(isin)
+    
+    # Check if lookup is in progress
+    if _is_lookup_status(bond):
+        return "🔄 Looking up..."
+    
     if bond is None:
-        return _format_error(f"Bond not found: {isin}")
+        return _format_error(f"Not found after search: {isin}")
 
     columns = [
         ("isin", "ISIN"),
@@ -565,6 +610,44 @@ def BONDSEARCH(
         return _format_error("No bonds match filters")
 
     return [[b.get("isin", "")] for b in bonds]
+
+
+@xlo.func(
+    help="Search bonds by name.\n\nExample: =BONDNAMESEARCH(\"OATEI 2030\")",
+    args={
+        "query": "Search query (name fragment, e.g., 'OATEI 2030', 'Treasury 10Y')",
+        "limit": "Max results (default: 5)",
+    },
+)
+def BONDNAMESEARCH(query: str, limit: int = 5) -> xlo.ExcelValue:
+    """
+    Search for bonds by name using full-text search.
+    
+    EXAMPLES:
+        =BONDNAMESEARCH("OATEI 2030")      → French inflation-linked bonds maturing ~2030
+        =BONDNAMESEARCH("Treasury 10Y")    → 10-year treasuries
+        =BONDNAMESEARCH("BTP 2.8")         → Italian bonds with ~2.8% coupon
+        =BONDNAMESEARCH("Gilt 2054")       → UK gilts maturing in 2054
+    
+    RETURNS: Vertical array of matching ISINs (spills down)
+    
+    TIP: Use with BONDSTATIC to get details:
+        =BONDSTATIC(BONDNAMESEARCH("OATEI 2030"), "coupon_rate")
+    """
+    if not query or not query.strip():
+        return _format_error("Search query required")
+
+    success, data = _api_request("GET", "/v1/search", params={"q": query, "limit": limit})
+    
+    if not success:
+        return _format_error(str(data))
+
+    results = data.get("results", [])
+    if not results:
+        return _format_error(f"No bonds found matching: {query}")
+
+    # Return as vertical array
+    return [[isin] for isin in results]
 
 
 @xlo.func(
@@ -1039,6 +1122,7 @@ def BONDHELP(topic: str | None = None) -> xlo.ExcelValue:
             ["BONDINFO", "Get all fields as a row"],
             ["BONDLIST", "List ISINs by country"],
             ["BONDSEARCH", "Search with filters"],
+            ["BONDNAMESEARCH", "Search by name (e.g., 'OATEI 2030')"],
             ["BONDCOUNT", "Count bonds"],
             ["BONDYEARSTOMAT", "Years to maturity"],
             ["BONDMATURITYRANGE", "Bonds maturing in date range"],
