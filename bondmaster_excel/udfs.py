@@ -280,7 +280,6 @@ def _format_error(msg: str) -> str:
         "isin": "ISIN code (e.g., 'GB00BYZW3G56', 'US912810TM58')",
         "field": "Field name: coupon_rate, maturity_date, issuer, currency, security_type, etc.",
     },
-    category="BondMaster",
 )
 def BONDSTATIC(isin: str, field: str) -> xlo.ExcelValue:
     """
@@ -349,7 +348,6 @@ def BONDSTATIC(isin: str, field: str) -> xlo.ExcelValue:
         "isin": "ISIN code",
         "with_headers": "Include header row (default: FALSE)",
     },
-    category="BondMaster",
 )
 def BONDINFO(isin: str, with_headers: bool = False) -> xlo.ExcelValue:
     """
@@ -409,7 +407,6 @@ def BONDINFO(isin: str, with_headers: bool = False) -> xlo.ExcelValue:
         "security_type": "Optional: NOMINAL or INDEX_LINKED",
         "limit": "Max results (default: 500)",
     },
-    category="BondMaster",
 )
 def BONDLIST(
     country: str,
@@ -463,7 +460,6 @@ def BONDLIST(
         "field3": "Optional third filter",
         "value3": "Optional third value",
     },
-    category="BondMaster",
 )
 def BONDSEARCH(
     field1: str,
@@ -521,7 +517,6 @@ def BONDSEARCH(
     args={
         "country": "Optional country code to filter",
     },
-    category="BondMaster",
 )
 def BONDCOUNT(country: str | None = None) -> xlo.ExcelValue:
     """
@@ -554,7 +549,6 @@ def BONDCOUNT(country: str | None = None) -> xlo.ExcelValue:
         "isin": "ISIN code",
         "as_of": "Optional: calculation date (default: today)",
     },
-    category="BondMaster",
 )
 def BONDYEARSTOMAT(isin: str, as_of: str | None = None) -> xlo.ExcelValue:
     """
@@ -596,7 +590,6 @@ def BONDYEARSTOMAT(isin: str, as_of: str | None = None) -> xlo.ExcelValue:
         "to_date": "End date (YYYY-MM-DD)",
         "country": "Optional country filter",
     },
-    category="BondMaster",
 )
 def BONDMATURITYRANGE(
     from_date: str,
@@ -641,7 +634,6 @@ def BONDMATURITYRANGE(
     args={
         "isin": "ISIN code",
     },
-    category="BondMaster",
 )
 def BONDCOUPONFREQ(isin: str) -> xlo.ExcelValue:
     """
@@ -668,7 +660,6 @@ def BONDCOUPONFREQ(isin: str) -> xlo.ExcelValue:
     args={
         "isin": "ISIN code",
     },
-    category="BondMaster",
 )
 def BONDISLINKER(isin: str) -> xlo.ExcelValue:
     """
@@ -697,7 +688,6 @@ def BONDISLINKER(isin: str) -> xlo.ExcelValue:
         "country": "Country to refresh (or blank for all)",
         "api_key": "API key for authentication",
     },
-    category="BondMaster",
 )
 def BONDREFRESH(country: str | None = None, api_key: str | None = None) -> xlo.ExcelValue:
     """
@@ -741,7 +731,6 @@ def BONDREFRESH(country: str | None = None, api_key: str | None = None) -> xlo.E
         "isin": "ISIN code",
         "field": "Optional: specific field to check",
     },
-    category="BondMaster",
 )
 def BONDLINEAGE(isin: str, field: str | None = None) -> xlo.ExcelValue:
     """
@@ -785,7 +774,6 @@ def BONDLINEAGE(isin: str, field: str | None = None) -> xlo.ExcelValue:
         "isin": "ISIN code",
         "limit": "Max records (default: 10)",
     },
-    category="BondMaster",
 )
 def BONDHISTORY(isin: str, limit: int = 10) -> xlo.ExcelValue:
     """
@@ -828,7 +816,6 @@ def BONDHISTORY(isin: str, limit: int = 10) -> xlo.ExcelValue:
         "action_type": "Optional: MATURED, CALLED, COUPON_CHANGE",
         "days_ahead": "For maturities: days to look ahead (default: 30)",
     },
-    category="BondMaster",
 )
 def BONDACTIONS(
     action_type: str | None = None,
@@ -886,7 +873,6 @@ def BONDACTIONS(
 
 @xlo.func(
     help="Check if BondMaster API is running and connected.",
-    category="BondMaster",
     volatile=True,
 )
 def BONDAPI_STATUS() -> str:
@@ -909,7 +895,6 @@ def BONDAPI_STATUS() -> str:
 
 @xlo.func(
     help="Clear the bond data cache (forces refresh from API).",
-    category="BondMaster",
     volatile=True,
 )
 def BONDCACHE_CLEAR() -> str:
@@ -927,7 +912,6 @@ def BONDCACHE_CLEAR() -> str:
 
 @xlo.func(
     help="Show cache performance statistics.",
-    category="BondMaster",
     volatile=True,
 )
 def BONDCACHE_STATS() -> str:
@@ -953,7 +937,6 @@ def BONDCACHE_STATS() -> str:
     args={
         "topic": "Optional: 'fields', 'countries', 'functions', or function name",
     },
-    category="BondMaster",
 )
 def BONDHELP(topic: str | None = None) -> xlo.ExcelValue:
     """
@@ -1024,7 +1007,6 @@ def BONDHELP(topic: str | None = None) -> xlo.ExcelValue:
     args={
         "isin": "ISIN to validate",
     },
-    category="BondMaster",
 )
 def BONDISINVALID(isin: str) -> xlo.ExcelValue:
     """
