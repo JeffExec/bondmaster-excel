@@ -40,16 +40,23 @@
 - Microsoft Excel (desktop version, not web)
 - Python 3.11 or 3.12
 - Git (for cloning repositories)
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
 > ⚠️ **Architecture must match:** If your Excel is 64-bit (most common), you need 64-bit Python.
 > Check Excel: File → Account → About Excel → look for "64-bit" or "32-bit".
 > Check Python: `python -c "import struct; print(struct.calcsize('P')*8, 'bit')"`
 
+### Install uv (recommended)
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
 ---
 
-### Option A: Virtual Environment (Recommended for developers)
+### Option A: Virtual Environment with uv (Recommended)
 
-#### Step 1: Create a project folder and virtual environment
+#### Step 1: Create a project folder
 
 Open **PowerShell** and run:
 
@@ -57,8 +64,6 @@ Open **PowerShell** and run:
 cd ~\PythonProjects   # or wherever you keep projects
 mkdir bondmaster-excel
 cd bondmaster-excel
-python -m venv .venv
-.venv\Scripts\activate
 ```
 
 #### Step 2: Install packages from GitHub
@@ -69,27 +74,30 @@ python -m venv .venv
 ```powershell
 # Install GitHub CLI if you haven't: https://cli.github.com/
 gh auth login
-pip install git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
+uv init
+uv add git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
 ```
 
 **Option B: Use a Personal Access Token**
 ```powershell
 # Create a PAT at https://github.com/settings/tokens with 'repo' scope
 # Then use it in the URL (replace YOUR_TOKEN):
-pip install git+https://YOUR_TOKEN@github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
+uv init
+uv add git+https://YOUR_TOKEN@github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
 ```
 
 **Option C: Clone and install locally**
 ```powershell
 git clone https://github.com/JeffExec/bond-master.git
-pip install ./bond-master xlOil httpx
-pip install git+https://github.com/JeffExec/bondmaster-excel.git
+uv init
+uv add ./bond-master xlOil httpx
+uv add git+https://github.com/JeffExec/bondmaster-excel.git
 ```
 
 #### Step 3: Install xlOil into Excel
 
 ```powershell
-xloil install
+uv run xloil install
 ```
 
 You should see:
@@ -124,13 +132,13 @@ PYTHONEXECUTABLE='''C:\Users\<you>\PythonProjects\bondmaster-excel\.venv\Scripts
 #### Step 5: Load bond data
 
 ```powershell
-bondmaster fetch --seed-only
+uv run bondmaster fetch --seed-only
 ```
 
 #### Step 6: Start the API server
 
 ```powershell
-bondmaster serve
+uv run bondmaster serve
 ```
 
 Keep this terminal open while using Excel.
@@ -144,34 +152,24 @@ Keep this terminal open while using Excel.
 
 ---
 
-### Option B: System-wide Install (Simpler for servers/non-developers)
+### Option B: System-wide Install with uv (Simpler for servers)
 
-For Windows servers or users who don't need isolated environments:
+For Windows servers or users who don't need project-specific environments:
 
 > ⚠️ **Authentication Required:** See Step 2 above for GitHub authentication options (the `bond-master` repo is private).
 
 ```powershell
-# Install packages (uses user site-packages if no admin)
-# Use gh auth login first, or include your PAT in the URL
-pip install --user git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
+# Install uv globally
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Install packages globally with uv tool
+uv tool install bondmaster --from git+https://github.com/JeffExec/bond-master.git
+uv tool install xloil
 ```
 
-> ⚠️ **PATH issue:** pip installs scripts to a folder not in PATH. Find your Scripts folder:
-> ```powershell
-> pip show xloil | Select-String "Location"
-> # Example output: Location: C:\Users\<you>\AppData\Roaming\Python\Python312\site-packages
-> # Scripts are at: C:\Users\<you>\AppData\Roaming\Python\Python312\Scripts
-> ```
-
+**Install xlOil into Excel:**
 ```powershell
-# Set Scripts path for this session (adjust path from above)
-$scripts = "$env:APPDATA\Python\Python312\Scripts"
-
-# For user installs, set XLOIL_BIN_DIR (binaries are in a different location)
-$env:XLOIL_BIN_DIR = "$env:APPDATA\Python\share\xloil"
-
-# Close Excel first, then install xlOil
-& "$scripts\xloil.exe" install
+xloil install
 ```
 
 **Edit config:** Open `%APPDATA%\xlOil\xlOil.ini` and update:
@@ -179,23 +177,26 @@ $env:XLOIL_BIN_DIR = "$env:APPDATA\Python\share\xloil"
 ```toml
 [xlOil_Python]
 LoadModules=["xloil.xloil_ribbon", "bondmaster_excel.udfs"]
-
-[[xlOil_Python.Environment]]
-# Point to YOUR user site-packages (not a venv)
-XLOIL_PYTHON_PATH='''C:\Users\<you>\AppData\Roaming\Python\Python312\site-packages'''
 ```
 
 ```powershell
 # Load data and start server
-& "$scripts\bondmaster.exe" fetch --seed-only
-& "$scripts\bondmaster.exe" serve
+bondmaster fetch --seed-only
+bondmaster serve
 ```
 
-> 💡 **Tip:** To avoid typing full paths, add Scripts to PATH permanently:
-> ```powershell
-> [Environment]::SetEnvironmentVariable("PATH", "$env:PATH;$scripts", "User")
-> # Restart PowerShell after this
-> ```
+### Option C: Traditional pip Install (fallback)
+
+If you prefer pip over uv:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+pip install git+https://github.com/JeffExec/bond-master.git git+https://github.com/JeffExec/bondmaster-excel.git xlOil httpx
+xloil install
+bondmaster fetch --seed-only
+bondmaster serve
+```
 
 ---
 
@@ -276,7 +277,9 @@ The API server isn't running.
 
 ```powershell
 # In a new terminal:
-.venv\Scripts\activate  # if using venv
+uv run bondmaster serve
+# Or if using traditional venv:
+.venv\Scripts\activate
 bondmaster serve
 ```
 
@@ -294,12 +297,14 @@ Check the log for import errors. Common issues:
 
 1. **bondmaster package not installed:**
    ```powershell
-   pip install git+https://github.com/JeffExec/bond-master.git
+   uv add git+https://github.com/JeffExec/bond-master.git
+   # Or with pip: pip install git+https://github.com/JeffExec/bond-master.git
    ```
 
 2. **httpx not installed:**
    ```powershell
-   pip install httpx
+   uv add httpx
+   # Or with pip: pip install httpx
    ```
 
 ### xlOil Log shows "TypeError: func() got an unexpected keyword argument 'category'"
@@ -308,7 +313,8 @@ You have an older bondmaster-excel with xlOil 0.21+. The `category` parameter wa
 
 **Fix:** Update bondmaster-excel:
 ```powershell
-pip install --upgrade git+https://github.com/JeffExec/bondmaster-excel.git
+uv add --upgrade git+https://github.com/JeffExec/bondmaster-excel.git
+# Or with pip: pip install --upgrade git+https://github.com/JeffExec/bondmaster-excel.git
 ```
 
 ---

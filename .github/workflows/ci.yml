@@ -16,22 +16,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          python -m pip install --upgrade pip
-          pip install git+https://x-access-token:$env:GH_PAT@github.com/JeffExec/bond-master.git
-          pip install -e ".[dev]"
+          uv sync --extra dev
+          uv add git+https://x-access-token:$env:GH_PAT@github.com/JeffExec/bond-master.git
 
       - name: Run tests with coverage
-        run: |
-          pytest tests/ --cov=bondmaster_excel --cov-report=xml --cov-report=term-missing
+        run: uv run pytest tests/ --cov=bondmaster_excel --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -45,51 +44,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-      - name: Install ruff
-        run: pip install ruff
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
 
       - name: Run ruff
-        run: ruff check bondmaster_excel/
+        run: uv run ruff check bondmaster_excel/
 
   type-check:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+        run: uv python install 3.12
 
       - name: Install dependencies
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          python -m pip install --upgrade pip
-          pip install git+https://x-access-token:$env:GH_PAT@github.com/JeffExec/bond-master.git
-          pip install -e ".[dev]"
-          pip install mypy
+          uv sync --extra dev
+          uv add git+https://x-access-token:$env:GH_PAT@github.com/JeffExec/bond-master.git
 
       - name: Run mypy
-        run: mypy bondmaster_excel/ --ignore-missing-imports
+        run: uv run mypy bondmaster_excel/ --ignore-missing-imports
 
   security:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-      - name: Install bandit
-        run: pip install bandit
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
 
       - name: Run bandit
-        run: bandit -r bondmaster_excel/ -f txt
+        run: uv run bandit -r bondmaster_excel/ -f txt
