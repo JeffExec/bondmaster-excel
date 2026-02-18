@@ -180,10 +180,16 @@ LoadModules=["xloil.xloil_ribbon", "bondmaster_excel.udfs"]
 ```
 
 ```powershell
+# Create a working directory (important: run fetch and serve from here)
+mkdir C:\bondmaster
+cd C:\bondmaster
+
 # Load data and start server
 bondmaster fetch --seed-only
 bondmaster serve
 ```
+
+> **Important:** Both `fetch` and `serve` must run from the same directory. The database is created at `data/bonds.db` relative to where you run the command. If you run from different directories, they'll use different databases.
 
 ### Option C: Traditional pip Install (fallback)
 
@@ -316,6 +322,35 @@ You have an older bondmaster-excel with xlOil 0.21+. The `category` parameter wa
 uv add --upgrade git+https://github.com/JeffExec/bondmaster-excel.git
 # Or with pip: pip install --upgrade git+https://github.com/JeffExec/bondmaster-excel.git
 ```
+
+### "No bonds found" but fetch succeeded
+
+The `fetch` and `serve` commands are using different database files.
+
+**Diagnosis:** Search for all `bonds.db` files:
+```powershell
+Get-ChildItem -Path C:\ -Recurse -Filter "bonds.db" -ErrorAction SilentlyContinue 2>$null | Select-Object FullName, Length
+```
+
+If you see multiple files with different sizes, the larger one has your data.
+
+**Fix:** Set `BONDMASTER_DB_PATH` to the file with data:
+```powershell
+# Find which file has data (largest file)
+$env:BONDMASTER_DB_PATH = "C:\path\to\your\bonds.db"
+bondmaster serve
+```
+
+**Prevention:** Always run `fetch` and `serve` from the same directory, or set `BONDMASTER_DB_PATH` consistently:
+```powershell
+# Add to your PowerShell profile for persistence:
+$env:BONDMASTER_DB_PATH = "C:\bondmaster\data\bonds.db"
+```
+
+> **Note:** This issue is fixed in bond-master v2.1+. Update to get consistent paths:
+> ```powershell
+> uv add --upgrade git+https://github.com/JeffExec/bond-master.git
+> ```
 
 ---
 
