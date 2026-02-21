@@ -26,6 +26,7 @@ dependencies = [
     "xloil>=0.19",
     "httpx>=0.25.0",
     "bondmaster>=0.1.0",
+    "structlog>=24.0.0",
 ]
 
 [project.optional-dependencies]
@@ -49,3 +50,11 @@ ignore = [
     "N802",   # Function name should be lowercase (Excel UDFs need uppercase)
     "W293",   # Blank line contains whitespace (in docstrings)
 ]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+# xloil is a Windows-only runtime library without type stubs
+# The untyped-decorator errors are unavoidable
+ignore_missing_imports = true
+disable_error_code = ["untyped-decorator"]

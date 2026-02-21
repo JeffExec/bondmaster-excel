@@ -21,7 +21,6 @@ Cache Strategy:
     so short TTL balances freshness vs. performance.
 """
 
-import logging
 import os
 import re
 import threading
@@ -30,17 +29,21 @@ from datetime import date, datetime
 from typing import Any, NamedTuple
 
 import httpx
+import structlog
 import xloil as xlo
 
 # =============================================================================
 # Logging
 # =============================================================================
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.add_log_level,
+        structlog.processors.JSONRenderer(),
+    ]
 )
-logger = logging.getLogger("bondmaster_excel")
+logger = structlog.get_logger("bondmaster_excel")
 
 # =============================================================================
 # Configuration
@@ -100,7 +103,7 @@ def _get_client() -> httpx.Client:
     global _client
     with _client_lock:
         if _client is None:
-            logger.info(f"Initializing HTTP client: base_url={API_BASE_URL}, timeout={REQUEST_TIMEOUT}s")
+            logger.info("Initializing HTTP client", base_url=API_BASE_URL, timeout_s=REQUEST_TIMEOUT)
             _client = httpx.Client(base_url=API_BASE_URL, timeout=REQUEST_TIMEOUT)
         return _client
 
@@ -108,9 +111,9 @@ def _get_client() -> httpx.Client:
 def _api_request(
     method: str,
     path: str,
-    params: dict | None = None,
-    json: dict | None = None,
-    headers: dict | None = None,
+    params: dict[str, Any] | None = None,
+    json: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> tuple[bool, Any]:
     """
     Make API request with retry logic.
@@ -135,45 +138,45 @@ def _api_request(
             )
 
             if response.status_code == 200:
-                logger.debug(f"API request successful: {method} {path}")
+                logger.debug("API request successful", method=method, path=path)
                 return True, response.json()
             elif response.status_code == 202:
                 # Lookup queued - bond not in DB, background fetch started
-                logger.info(f"API returned 202 (lookup queued): {method} {path}")
+                logger.info("API returned 202 (lookup queued)", method=method, path=path)
                 data = response.json()
                 # Return special status so callers can show "Looking up..."
                 return False, {"_status": "looking_up", "job_id": data.get("job_id")}
             elif response.status_code == 404:
-                logger.warning(f"API returned 404: {method} {path}")
+                logger.warning("API returned 404", method=method, path=path)
                 return False, "Not found"
             elif response.status_code == 403:
-                logger.error(f"API authentication failed: {method} {path}")
+                logger.error("API authentication failed", method=method, path=path)
                 return False, "API key required"
             else:
-                logger.warning(f"API returned HTTP {response.status_code}: {method} {path}")
+                logger.warning("API returned error", method=method, path=path, status_code=response.status_code)
                 return False, f"HTTP {response.status_code}"
 
         except httpx.TimeoutException:
             if attempt < MAX_RETRIES:
-                logger.debug(f"Timeout on attempt {attempt + 1}, retrying: {method} {path}")
+                logger.debug("Timeout, retrying", attempt=attempt + 1, method=method, path=path)
                 time.sleep(0.1 * (2 ** attempt))
                 continue
-            logger.error(f"API timeout after {MAX_RETRIES + 1} attempts: {method} {path}")
+            logger.error("API timeout after retries", attempts=MAX_RETRIES + 1, method=method, path=path)
             return False, "Timeout - is BondMaster API running?"
 
         except httpx.ConnectError:
-            logger.error(f"Cannot connect to API: {method} {path} (base_url={API_BASE_URL})")
+            logger.error("Cannot connect to API", method=method, path=path, base_url=API_BASE_URL)
             return False, "Cannot connect - start API with: bondmaster serve"
 
         except httpx.RequestError as e:
             if attempt < MAX_RETRIES:
-                logger.debug(f"Network error on attempt {attempt + 1}, retrying: {type(e).__name__}")
+                logger.debug("Network error, retrying", attempt=attempt + 1, error_type=type(e).__name__)
                 time.sleep(0.1 * (2 ** attempt))
                 continue
-            logger.error(f"Network error after {MAX_RETRIES + 1} attempts: {type(e).__name__}")
+            logger.error("Network error after retries", attempts=MAX_RETRIES + 1, error_type=type(e).__name__)
             return False, f"Network error: {type(e).__name__}"
 
-    logger.error(f"Max retries exceeded: {method} {path}")
+    logger.error("Max retries exceeded", method=method, path=path)
     return False, "Max retries exceeded"
 
 
@@ -210,7 +213,7 @@ def _parse_date(value: Any) -> date | None:
 # =============================================================================
 
 class _CacheEntry(NamedTuple):
-    data: dict
+    data: dict[str, Any]
     expires_at: float
 
 
@@ -236,7 +239,7 @@ class _TTLCache:
         self._hits = 0
         self._misses = 0
 
-    def get(self, key: str) -> dict | None:
+    def get(self, key: str) -> dict[str, Any] | None:
         """Get value if present and not expired, updating LRU order.
         
         Complexity: O(1) average
@@ -247,20 +250,20 @@ class _TTLCache:
             entry = self._cache.get(key)
             if entry is None:
                 self._misses += 1
-                logger.debug(f"Cache miss: {key}")
+                logger.debug("Cache miss", key=key)
                 return None
             if time.time() > entry.expires_at:
                 del self._cache[key]
                 self._misses += 1
-                logger.debug(f"Cache expired: {key}")
+                logger.debug("Cache expired", key=key)
                 return None
             # Move to end (LRU)
             self._cache[key] = self._cache.pop(key)
             self._hits += 1
-            logger.debug(f"Cache hit: {key}")
+            logger.debug("Cache hit", key=key)
             return entry.data
 
-    def set(self, key: str, value: dict) -> None:
+    def set(self, key: str, value: dict[str, Any]) -> None:
         """Store value with TTL, evicting oldest if at capacity.
         
         Complexity: O(1) average
@@ -285,10 +288,10 @@ class _TTLCache:
             self._cache.clear()
             self._hits = 0
             self._misses = 0
-            logger.info(f"Cache cleared: {count} entries removed")
+            logger.info("Cache cleared", entries_removed=count)
             return count
 
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, Any]:
         """Return cache statistics: size, hit rate, TTL.
         
         Complexity: O(1) (arithmetic operations only)
@@ -308,7 +311,7 @@ class _TTLCache:
 _bond_cache = _TTLCache(maxsize=CACHE_MAX_SIZE, ttl_seconds=CACHE_TTL_SECONDS)
 
 
-def _fetch_bond(isin: str) -> dict | None:
+def _fetch_bond(isin: str) -> dict[str, Any] | None:
     """
     Fetch bond with caching.
     
@@ -319,7 +322,7 @@ def _fetch_bond(isin: str) -> dict | None:
     """
     isin = _normalize_isin(isin)
     if not _is_valid_isin(isin):
-        logger.warning(f"Invalid ISIN format: {isin}")
+        logger.warning("Invalid ISIN format", isin=isin)
         return None
 
     cached = _bond_cache.get(isin)
@@ -331,20 +334,20 @@ def _fetch_bond(isin: str) -> dict | None:
     if not success:
         # Check if this is a "looking_up" status
         if isinstance(data, dict) and data.get("_status") == "looking_up":
-            logger.info(f"Bond lookup in progress: {isin}, job_id={data.get('job_id')}")
+            logger.info("Bond lookup in progress", isin=isin, job_id=data.get('job_id'))
             return data  # Return the status dict
-        logger.debug(f"Failed to fetch bond: {isin}")
+        logger.debug("Failed to fetch bond", isin=isin)
         return None
 
     # Handle envelope response
-    bond = data.get("data", data) if isinstance(data, dict) else data
+    bond: dict[str, Any] | None = data.get("data", data) if isinstance(data, dict) else None
     if bond:
         _bond_cache.set(isin, bond)
-        logger.debug(f"Cached bond data: {isin}")
+        logger.debug("Cached bond data", isin=isin)
     return bond
 
 
-def _is_lookup_status(bond: dict | None) -> bool:
+def _is_lookup_status(bond: dict[str, Any] | None) -> bool:
     """Check if bond result is a lookup status (not actual bond data)."""
     return isinstance(bond, dict) and bond.get("_status") == "looking_up"
 
