@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv sync --extra dev
+
+      - name: Run tests
+        run: uv run pytest --tb=short
+
+      - name: Security scan
+        run: |
+          uv run bandit -r bondmaster_excel/ -ll
+          uv run pip-audit
+        continue-on-error: true
+
+      - name: Create release package
+        shell: pwsh
+        run: |
+          # Create release directory
+          New-Item -ItemType Directory -Force -Path release
+
+          # Copy Python source
+          Copy-Item -Recurse bondmaster_excel release/
+
+          # Copy config and docs
+          Copy-Item xlOil.ini release/
+          Copy-Item README.md release/
+          Copy-Item pyproject.toml release/
+
+          # Create install script
+          @"
+          @echo off
+          echo Installing BondMaster Excel Add-in...
+          pip install uv
+          uv sync
+          echo.
+          echo Installation complete!
+          echo.
+          echo Next steps:
+          echo 1. Open Excel
+          echo 2. Go to Options > Add-ins > COM Add-ins > Go
+          echo 3. Browse to: %CD%\xlOil.xll
+          echo 4. Click OK
+          pause
+          "@ | Out-File -FilePath release/install.bat -Encoding ASCII
+
+          # Create ZIP
+          Compress-Archive -Path release/* -DestinationPath bondmaster-excel-${{ github.ref_name }}.zip
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package
+          path: bondmaster-excel-*.zip
+
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-package
+          path: ./
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if [ -f CHANGELOG.md ]; then
+            sed -n "/^## \[$VERSION\]/,/^## \[/p" CHANGELOG.md | head -n -1 > release_notes.md
+          else
+            echo "Release $VERSION" > release_notes.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release_notes.md
+          files: bondmaster-excel-*.zip
+          generate_release_notes: true
