@@ -51,7 +51,11 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          uv add git+https://x-access-token:${GH_PAT}@github.com/JeffExec/bond-master.git
+          uv sync --extra dev
 
       - name: Run ruff
         run: uv run ruff check bondmaster_excel/
@@ -89,7 +93,11 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          uv add git+https://x-access-token:${GH_PAT}@github.com/JeffExec/bond-master.git
+          uv sync --extra dev
 
       - name: Run bandit
         run: uv run bandit -r bondmaster_excel/ -f txt
